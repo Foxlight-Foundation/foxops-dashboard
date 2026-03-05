@@ -9,8 +9,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const workspaceRoot = process.env.WORKSPACE_ROOT || path.resolve(__dirname, '..');
 const killQueuePath = path.join(workspaceRoot, 'docs', 'ACP_KILL_QUEUE.md');
-const foxmemoryBaseUrl = process.env.FOXMEMORY_BASE_URL || 'http://192.168.0.118:8082';
+const foxmemoryBaseUrl = process.env.FOXMEMORY_BASE_URL || 'http://127.0.0.1:8082';
 const foxmemoryUserId = process.env.FOXMEMORY_USER_ID || 'thomastupper92618@gmail.com';
+const mem0ApiBaseUrl = process.env.MEM0_API_BASE_URL || 'https://api.mem0.ai';
+const mem0ApiKey = process.env.MEM0_API_KEY || '';
+const qdrantCollection = process.env.QDRANT_COLLECTION || 'foxmemory';
 const gatewayErrLogPath = path.join(process.env.HOME || '', '.openclaw', 'logs', 'gateway.err.log');
 const pluginLogMatch = /foxmemory-openclaw-memory|foxmemory-plugin-v2/i;
 const gatewayLogPath = path.join(process.env.HOME || '', '.openclaw', 'logs', 'gateway.log');
@@ -319,6 +322,77 @@ const buildLastNDaysSeries = (series: DaySeries[], days = 7): DaySeries[] => {
   return out;
 }
 
+
+const deriveQdrantBaseUrl = (): string | null => {
+  if (process.env.QDRANT_BASE_URL) return process.env.QDRANT_BASE_URL;
+  try {
+    const u = new URL(foxmemoryBaseUrl);
+    return `${u.protocol}//${u.hostname}:6333`;
+  } catch {
+    return null;
+  }
+};
+
+const fetchQdrantTotalCount = async (): Promise<number | null> => {
+  const base = deriveQdrantBaseUrl();
+  if (!base) return null;
+  try {
+    const res = await fetch(`${base}/collections/${qdrantCollection}/points/count`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ exact: true }),
+    });
+    if (!res.ok) return null;
+    const json = (await res.json()) as { result?: { count?: number } };
+    return Number(json?.result?.count ?? 0);
+  } catch {
+    return null;
+  }
+};
+
+const fetchMem0TodayEventCounts = async (userId: string): Promise<{ ADD: number; UPDATE: number; DELETE: number } | null> => {
+  if (!mem0ApiKey) return null;
+  const tzOffsetMs = new Date().getTimezoneOffset() * 60 * 1000;
+  const localNow = new Date(Date.now() - tzOffsetMs);
+  const day = localNow.toISOString().slice(0, 10);
+  const from = `${day}T00:00:00`;
+  const to = `${day}T23:59:59`;
+
+  const urls = [
+    `${mem0ApiBaseUrl}/v1/events?user_id=${encodeURIComponent(userId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=500`,
+    `${mem0ApiBaseUrl}/v1/events?user_id=${encodeURIComponent(userId)}&limit=500`,
+  ];
+
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${mem0ApiKey}`,
+          'x-api-key': mem0ApiKey,
+        },
+      });
+      if (!res.ok) continue;
+      const json = (await res.json()) as { results?: Array<Record<string, unknown>>; data?: Array<Record<string, unknown>> };
+      const rows = Array.isArray(json?.results) ? json.results : Array.isArray(json?.data) ? json.data : [];
+      if (!rows.length) return { ADD: 0, UPDATE: 0, DELETE: 0 };
+
+      const counts = { ADD: 0, UPDATE: 0, DELETE: 0 };
+      for (const row of rows) {
+        const t = String((row.event_type ?? row.eventType ?? '')).toUpperCase();
+        if (t === 'ADD') counts.ADD += 1;
+        else if (t === 'UPDATE') counts.UPDATE += 1;
+        else if (t === 'DELETE') counts.DELETE += 1;
+      }
+      return counts;
+    } catch {
+      // try fallback URL
+    }
+  }
+
+  return null;
+};
+
 const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
   const endpoints = ['/health', '/v1/health', '/'];
   let api: ApiResult = { ok: false, status: null, endpoint: null };
@@ -385,12 +459,32 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
   const pluginTelemetry = loadPluginTelemetry(60);
   const pluginLogs = loadPluginLogTail(120);
 
+  const qdrantTotal = await fetchQdrantTotalCount();
+  const memoryCount = qdrantTotal ?? memories.length;
+
+  const eventCounts = await fetchMem0TodayEventCounts(foxmemoryUserId);
+  const statsMerged: FoxmemoryStats | null = foxmemoryStats
+    ? {
+        ...foxmemoryStats,
+        memoryEvents: eventCounts
+          ? {
+              ...foxmemoryStats.memoryEvents,
+              ADD: eventCounts.ADD,
+              UPDATE: eventCounts.UPDATE,
+              DELETE: eventCounts.DELETE,
+            }
+          : foxmemoryStats.memoryEvents,
+      }
+    : eventCounts
+      ? { memoryEvents: { ...eventCounts, NONE: 0 } }
+      : null;
+
   return {
     baseUrl: foxmemoryBaseUrl,
     userId: foxmemoryUserId,
     api,
     ingestionQueueDepth: queueDepth,
-    memoryCount: memories.length,
+    memoryCount,
     memoriesByDay: dailySeries,
     memoriesByDay7d: buildLastNDaysSeries(dailySeries, 7),
     retrievalQuality: retrieval,
@@ -398,7 +492,7 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
     autoCapture,
     pluginTelemetry,
     pluginLogs,
-    stats: foxmemoryStats,
+    stats: statsMerged,
   };
 }
 
