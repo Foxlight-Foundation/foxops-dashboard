@@ -34,44 +34,27 @@ import { alpha, createTheme, styled, ThemeProvider } from '@mui/material/styles'
 import { useDispatch, useSelector } from 'react-redux';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
+import StopCircleRoundedIcon from '@mui/icons-material/StopCircleRounded';
 import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import MemoryRoundedIcon from '@mui/icons-material/MemoryRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
-import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded';
-import PauseCircleRoundedIcon from '@mui/icons-material/PauseCircleRounded';
 import TimelineRoundedIcon from '@mui/icons-material/TimelineRounded';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip, PieChart, Pie, Cell } from 'recharts';
 import { setSection, setChartRange, toggleMode } from './uiSlice';
 import {
-  useGetRegistryQuery,
+  useGetSessionsQuery,
   useGetFoxmemoryOverviewQuery,
-  useKillRegistryRunMutation,
+  useKillSessionMutation,
+  useDeleteSessionMutation,
 } from './services/dashboardApi';
 import type { RootState } from './store';
-import type { RegistryRow, Notice, ChartRange } from './types';
+import type { OpenclawSession, Notice, ChartRange } from './types';
 
 const DRAWER_WIDTH = 250;
 
-const STATUS_HELP: Record<string, string> = {
-  spawned: 'Session was created and registered, but no runtime confirmation yet.',
-  running: 'Session is actively executing work.',
-  silent: 'Run accepted, but no child output has been observed yet.',
-  completed: 'Work finished successfully and outcome was recorded.',
-  failed: 'Work ended with an error or unsuccessful result.',
-  killed: 'Session was intentionally stopped or kill-requested.',
-};
-
-const STATUS_COLOR: Record<string, 'info' | 'primary' | 'warning' | 'success' | 'error' | 'secondary' | 'default'> = {
-  spawned: 'info',
-  running: 'primary',
-  silent: 'warning',
-  completed: 'success',
-  failed: 'error',
-  killed: 'secondary',
-};
 
 // ── Styled components ──────────────────────────────────────────────────────────
 
@@ -175,18 +158,6 @@ const LogoBox = styled(Box)({
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-interface StatusBadgeProps {
-  value: string | null | undefined;
-}
-
-const StatusBadge = ({ value }: StatusBadgeProps) => {
-  const key = (value || 'unknown').toLowerCase();
-  return (
-    <Tooltip title={STATUS_HELP[key] || 'Unknown status'} arrow>
-      <Chip size="small" label={value || 'unknown'} color={STATUS_COLOR[key] || 'default'} variant="filled" />
-    </Tooltip>
-  );
-}
 
 interface StatCardProps {
   title: string;
@@ -229,13 +200,13 @@ const App = () => {
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const {
-    data: registryData,
-    isFetching: registryFetching,
-    isError: registryIsError,
-    error: registryError,
-    refetch: refetchRegistry,
-    fulfilledTimeStamp: registryFulfilledAt,
-  } = useGetRegistryQuery(undefined, {
+    data: sessionsData,
+    isFetching: sessionsFetching,
+    isError: sessionsIsError,
+    error: sessionsError,
+    refetch: refetchSessions,
+    fulfilledTimeStamp: sessionsFulfilledAt,
+  } = useGetSessionsQuery(undefined, {
     pollingInterval: 15000,
     skipPollingIfUnfocused: true,
     refetchOnFocus: true,
@@ -256,7 +227,8 @@ const App = () => {
     refetchOnReconnect: true,
   });
 
-  const [killRun, { isLoading: killLoading }] = useKillRegistryRunMutation();
+  const [killSession, { isLoading: killLoading }] = useKillSessionMutation();
+  const [deleteSession, { isLoading: deleteLoading }] = useDeleteSessionMutation();
 
   const theme = useMemo(
     () =>
@@ -275,20 +247,20 @@ const App = () => {
   const grad = (a: string, b: string) => `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
 
   const onManualRefresh = () => {
-    if (section === 'acp') refetchRegistry();
+    if (section === 'acp') refetchSessions();
     else refetchFox();
   };
 
-  const onKill = async (row: RegistryRow) => {
+  const onKill = async (session: OpenclawSession) => {
     const reason = window.prompt('Reason for kill request?', 'Manual kill requested from dashboard');
     if (reason === null) return;
     try {
-      const json = await killRun({ runId: row.run_id, childSessionKey: row.child_session_key, reason }).unwrap();
+      const json = await killSession({ sessionKey: session.key, sessionId: session.sessionId, reason }).unwrap();
       setNotice({
         severity: json.immediateKillSucceeded ? 'success' : 'warning',
         text: json.immediateKillSucceeded
-          ? `Immediate kill attempted. ${json.note || ''}`
-          : `Immediate kill unavailable; queued. ${json.note || ''}`,
+          ? `Stop command sent. ${json.note || ''}`
+          : `Kill queued. ${json.note || ''}`,
       });
     } catch (e) {
       const err = e as RtkError;
@@ -296,8 +268,42 @@ const App = () => {
     }
   };
 
-  const registry = registryData || { summary: {} as typeof registryData extends undefined ? never : NonNullable<typeof registryData>['summary'], rows: [] };
-  const summary = registryData?.summary;
+  const onDelete = async (session: OpenclawSession) => {
+    if (!window.confirm(`Delete stale session?\n\n${session.key}`)) return;
+    try {
+      await deleteSession({ sessionKey: session.key, sessionId: session.sessionId }).unwrap();
+      setNotice({ severity: 'success', text: `Session deleted: ${session.key}` });
+    } catch (e) {
+      const err = e as RtkError;
+      setNotice({ severity: 'error', text: `Delete failed: ${String(err?.data?.error || err?.message || e)}` });
+    }
+  };
+
+  const MS_12H = 12 * 60 * 60 * 1000;
+  const isExcluded = (s: OpenclawSession) => ['main', 'telegram', 'heartbeat'].includes(s.key.split(':')[2] ?? '');
+  const isActive = (s: OpenclawSession) => (s.ageMs ?? Infinity) < MS_12H;
+
+  const allSessions = sessionsData?.sessions || [];
+  const sessions = allSessions.filter((s) => !isExcluded(s));
+  const activeSessions = sessions.filter(isActive);
+  const staleSessions = sessions.filter((s) => !isActive(s));
+
+  const fmtAge = (ageMs?: number) => {
+    if (ageMs == null) return '—';
+    const s = Math.floor(ageMs / 1000);
+    if (s < 60) return `${s}s ago`;
+    const m = Math.floor(s / 60);
+    if (m < 60) return `${m}m ago`;
+    const h = Math.floor(m / 60);
+    if (h < 24) return `${h}h ago`;
+    return `${Math.floor(h / 24)}d ago`;
+  };
+
+  const fmtTokens = (s: OpenclawSession) => {
+    if (s.totalTokens == null || s.contextTokens == null) return '—';
+    const pct = Math.round((s.totalTokens / s.contextTokens) * 100);
+    return `${Math.round(s.totalTokens / 1000)}k / ${Math.round(s.contextTokens / 1000)}k (${pct}%)`;
+  };
 
   const chartData = useMemo(() => {
     if (!foxmemory) return [];
@@ -337,7 +343,7 @@ const App = () => {
     ];
   }, [foxmemory]);
 
-  const lastRefreshTs = section === 'acp' ? registryFulfilledAt : foxFulfilledAt;
+  const lastRefreshTs = section === 'acp' ? sessionsFulfilledAt : foxFulfilledAt;
   const lastRefreshLabel = lastRefreshTs
     ? new Date(lastRefreshTs).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })
     : '—';
@@ -349,7 +355,7 @@ const App = () => {
   };
 
   const apiErrorText = section === 'acp'
-    ? (registryIsError ? getErrorText(registryError as RtkError) : '')
+    ? (sessionsIsError ? getErrorText(sessionsError as RtkError) : '')
     : (foxIsError ? getErrorText(foxError as RtkError) : '');
 
   return (
@@ -371,7 +377,7 @@ const App = () => {
               <ListItemIcon><HubRoundedIcon /></ListItemIcon><ListItemText primary="FoxMemory" />
             </ListItemButton>
             <ListItemButton selected={section === 'acp'} onClick={() => dispatch(setSection('acp'))} sx={{ borderRadius: 1 }}>
-              <ListItemIcon><DashboardRoundedIcon /></ListItemIcon><ListItemText primary="ACP Sessions" />
+              <ListItemIcon><DashboardRoundedIcon /></ListItemIcon><ListItemText primary="Agent Sessions" />
             </ListItemButton>
           </List>
 
@@ -387,10 +393,10 @@ const App = () => {
             <Toolbar>
               <Box sx={{ flexGrow: 1 }}>
                 <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.2, mb: 0.25 }}>
-                  {section === 'acp' ? 'ACP Sessions' : 'FoxMemory'}
+                  {section === 'acp' ? 'Agent Sessions' : 'FoxMemory'}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {section === 'acp' ? registryData?.registryPath || 'Loading…' : foxmemory?.baseUrl || 'Loading…'} · {lastRefreshLabel}
+                  {section === 'acp' ? `${sessions.length} sessions` : foxmemory?.baseUrl || 'Loading…'} · {lastRefreshLabel}
                 </Typography>
               </Box>
               {apiErrorText ? (
@@ -421,7 +427,7 @@ const App = () => {
                 sx={{
                   height: 3,
                   borderRadius: 999,
-                  opacity: registryFetching || foxLoading || killLoading ? 1 : 0,
+                  opacity: sessionsFetching || foxLoading || killLoading ? 1 : 0,
                   transition: 'opacity 140ms ease',
                 }}
               />
@@ -431,25 +437,37 @@ const App = () => {
             {section === 'acp' ? (
               <>
                 <Grid container spacing={1.5} mb={2.5}>
-                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="total" value={summary?.total ?? 0} icon={<MemoryRoundedIcon fontSize="small" />} iconColor={grad('#5e72e4', '#825ee4')} /></Grid>
-                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="running" value={summary?.running ?? 0} icon={<MemoryRoundedIcon fontSize="small" />} iconColor={grad('#11cdef', '#1171ef')} /></Grid>
-                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="completed" value={summary?.completed ?? 0} icon={<CheckCircleRoundedIcon fontSize="small" />} iconColor={grad('#2dce89', '#2dbd5a')} /></Grid>
-                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="failed" value={summary?.failed ?? 0} icon={<ErrorRoundedIcon fontSize="small" />} iconColor={grad('#f5365c', '#f56036')} /></Grid>
-                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="silent" value={summary?.silent ?? 0} icon={<PauseCircleRoundedIcon fontSize="small" />} iconColor={grad('#fb6340', '#fbb140')} /></Grid>
+                  <Grid item xs={12} sm={6} md={3}><StatCard title="active" value={activeSessions.length} icon={<CheckCircleRoundedIcon fontSize="small" />} iconColor={grad('#2dce89', '#2dbd5a')} /></Grid>
+                  <Grid item xs={12} sm={6} md={3}><StatCard title="stale" value={staleSessions.length} icon={<MemoryRoundedIcon fontSize="small" />} iconColor={grad('#8898aa', '#6c7a8d')} /></Grid>
                 </Grid>
 
                 <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
                   <Table size="small" stickyHeader>
-                    <TableHead><TableRow><TableCell>Created (CT)</TableCell><TableCell>Purpose</TableCell><TableCell>Status</TableCell><TableCell>Run ID</TableCell><TableCell>Child Session</TableCell><TableCell>Done (CT)</TableCell><TableCell>Outcome</TableCell><TableCell align="right">Action</TableCell></TableRow></TableHead>
+                    <TableHead><TableRow><TableCell>Status</TableCell><TableCell>Key</TableCell><TableCell>Age</TableCell><TableCell>Model</TableCell><TableCell>Tokens</TableCell><TableCell>Session ID</TableCell><TableCell align="right">Action</TableCell></TableRow></TableHead>
                     <TableBody>
-                      {(registryData?.rows || []).map((r, idx) => {
-                        const done = ['completed', 'failed', 'killed'].includes((r.status || '').toLowerCase());
+                      {sessions.map((s: OpenclawSession) => {
+                        const active = isActive(s);
                         return (
-                          <TableRow key={`${r.run_id}-${idx}`} hover>
-                            <TableCell>{r.created_at_ct}</TableCell><TableCell sx={{ minWidth: 260 }}>{r.purpose}</TableCell><TableCell><StatusBadge value={r.status} /></TableCell>
-                            <MonoTableCell>{r.run_id}</MonoTableCell><MonoTableCell>{r.child_session_key}</MonoTableCell>
-                            <TableCell>{r.done_at_ct}</TableCell><TableCell sx={{ minWidth: 260 }}>{r.outcome_summary}</TableCell>
-                            <TableCell align="right"><Tooltip title={done ? 'Already terminal status' : 'Attempt immediate kill, then queue fallback'} arrow><span><IconButton color="error" size="small" disabled={done} onClick={() => onKill(r)}><DeleteForeverIcon fontSize="small" /></IconButton></span></Tooltip></TableCell>
+                          <TableRow key={s.sessionId} hover>
+                            <TableCell>
+                              <Chip size="small" label={active ? 'active' : 'stale'} color={active ? 'success' : 'default'} variant={active ? 'filled' : 'outlined'} />
+                            </TableCell>
+                            <MonoTableCell>{s.key}</MonoTableCell>
+                            <TableCell>{fmtAge(s.ageMs)}</TableCell>
+                            <TableCell>{s.model ?? '—'}</TableCell>
+                            <TableCell>{fmtTokens(s)}</TableCell>
+                            <MonoTableCell sx={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.sessionId}</MonoTableCell>
+                            <TableCell align="right">
+                              {active ? (
+                                <Tooltip title="Send stop command to active session" arrow>
+                                  <IconButton color="error" size="small" disabled={killLoading} onClick={() => onKill(s)}><StopCircleRoundedIcon fontSize="small" /></IconButton>
+                                </Tooltip>
+                              ) : (
+                                <Tooltip title="Delete stale session + transcript" arrow>
+                                  <IconButton color="default" size="small" disabled={deleteLoading} onClick={() => onDelete(s)}><DeleteForeverIcon fontSize="small" /></IconButton>
+                                </Tooltip>
+                              )}
+                            </TableCell>
                           </TableRow>
                         );
                       })}

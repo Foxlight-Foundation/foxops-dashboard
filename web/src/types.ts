@@ -1,27 +1,28 @@
-export interface RegistryRow {
-  run_id: string;
-  child_session_key: string;
-  purpose: string;
-  status: string;
-  created_at_ct: string;
-  done_at_ct: string;
-  outcome_summary: string;
+export interface OpenclawSession {
+  key: string;
+  sessionId: string;
+  agentId: string;
+  kind?: string;
+  model?: string;
+  modelProvider?: string;
+  updatedAt?: number;
+  ageMs?: number;
+  systemSent?: boolean;
+  abortedLastRun?: boolean;
+  verboseLevel?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  totalTokensFresh?: boolean;
+  contextTokens?: number;
+  [key: string]: unknown;
 }
 
-export interface RegistrySummary {
+export interface SessionsResponse {
+  ok: boolean;
+  sessions: OpenclawSession[];
   total: number;
-  spawned: number;
-  running: number;
-  completed: number;
-  failed: number;
-  silent: number;
-  killed: number;
-}
-
-export interface RegistryResponse {
-  registryPath: string;
-  summary: RegistrySummary;
-  rows: RegistryRow[];
+  error?: string;
 }
 
 export interface FoxmemoryStats {
@@ -77,15 +78,26 @@ export interface Notice {
 }
 
 export interface KillArgs {
-  runId: string;
-  childSessionKey?: string;
+  sessionKey: string;
+  sessionId: string;
   reason?: string;
 }
 
 export interface KillResponse {
   ok: boolean;
   queued: boolean;
-  attemptedImmediateKill: boolean;
   immediateKillSucceeded: boolean;
   note: string;
+}
+
+export interface DeleteSessionArgs {
+  sessionKey: string;
+  sessionId: string;
+}
+
+export interface DeleteSessionResponse {
+  ok: boolean;
+  deleted?: boolean;
+  transcriptPath?: string;
+  error?: string;
 }

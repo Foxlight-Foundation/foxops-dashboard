@@ -1,32 +1,41 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { RegistryResponse, FoxmemoryResponse, KillArgs, KillResponse } from '../types';
+import type { SessionsResponse, FoxmemoryResponse, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse } from '../types';
 
 export const dashboardApi = createApi({
   reducerPath: 'dashboardApi',
   baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
-  tagTypes: ['Registry', 'Foxmemory'],
+  tagTypes: ['Sessions', 'Foxmemory'],
   endpoints: (builder) => ({
-    getRegistry: builder.query<RegistryResponse, void>({
-      query: () => '/registry',
-      providesTags: ['Registry'],
+    getSessions: builder.query<SessionsResponse, void>({
+      query: () => '/sessions',
+      providesTags: ['Sessions'],
     }),
     getFoxmemoryOverview: builder.query<FoxmemoryResponse, void>({
       query: () => '/foxmemory/overview',
       providesTags: ['Foxmemory'],
     }),
-    killRegistryRun: builder.mutation<KillResponse, KillArgs>({
-      query: ({ runId, childSessionKey, reason }) => ({
-        url: '/registry/kill',
+    killSession: builder.mutation<KillResponse, KillArgs>({
+      query: ({ sessionKey, sessionId, reason }) => ({
+        url: '/sessions/kill',
         method: 'POST',
-        body: { runId, childSessionKey, reason },
+        body: { sessionKey, sessionId, reason },
       }),
-      invalidatesTags: ['Registry', 'Foxmemory'],
+      invalidatesTags: ['Sessions'],
+    }),
+    deleteSession: builder.mutation<DeleteSessionResponse, DeleteSessionArgs>({
+      query: ({ sessionKey, sessionId }) => ({
+        url: '/sessions/delete',
+        method: 'POST',
+        body: { sessionKey, sessionId },
+      }),
+      invalidatesTags: ['Sessions'],
     }),
   }),
 });
 
 export const {
-  useGetRegistryQuery,
+  useGetSessionsQuery,
   useGetFoxmemoryOverviewQuery,
-  useKillRegistryRunMutation,
+  useKillSessionMutation,
+  useDeleteSessionMutation,
 } = dashboardApi;

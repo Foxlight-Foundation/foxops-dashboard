@@ -7,9 +7,7 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const workspaceRoot = path.resolve(__dirname, '..', '..');
-const registryPath = path.join(workspaceRoot, 'docs', 'ACP_SESSION_REGISTRY.md');
-const updateScriptPath = path.join(workspaceRoot, 'scripts', 'acp-session-registry-update.sh');
+const workspaceRoot = process.env.WORKSPACE_ROOT || path.resolve(__dirname, '..');
 const killQueuePath = path.join(workspaceRoot, 'docs', 'ACP_KILL_QUEUE.md');
 const foxmemoryBaseUrl = process.env.FOXMEMORY_BASE_URL || 'http://192.168.0.118:8082';
 const foxmemoryUserId = process.env.FOXMEMORY_USER_ID || 'thomastupper92618@gmail.com';
@@ -19,8 +17,17 @@ const artifactsDir = path.join(workspaceRoot, 'artifacts');
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-interface RegistryRow {
-  [key: string]: string;
+interface OpenclawSession {
+  key: string;
+  sessionId: string;
+  kind?: string;
+  model?: string;
+  age?: string;
+  tokensUsed?: number;
+  tokensCtx?: number;
+  tokensPct?: number;
+  flags?: string[];
+  [key: string]: unknown;
 }
 
 interface RetrievalQuality {
@@ -109,44 +116,12 @@ interface FoxmemoryOverview {
 }
 
 interface KillRequestBody {
-  runId?: string;
-  childSessionKey?: string;
+  sessionKey: string;
+  sessionId: string;
   reason?: string;
 }
 
 // ── Data loading ───────────────────────────────────────────────────────────────
-
-const parseRegistryTable = (md: string): RegistryRow[] => {
-  const lines = md.split('\n');
-  const tableLines = lines.filter((l) => l.trim().startsWith('|'));
-  if (tableLines.length < 3) return [];
-
-  const header = tableLines[0]
-    .split('|')
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  const rows = tableLines.slice(2).map((line) =>
-    line
-      .split('|')
-      .map((s) => s.trim())
-      .filter(Boolean)
-  );
-
-  return rows.map((cols) => {
-    const obj: RegistryRow = {};
-    header.forEach((h, i) => {
-      obj[h] = cols[i] ?? '';
-    });
-    return obj;
-  });
-}
-
-const loadRegistry = (): RegistryRow[] => {
-  if (!fs.existsSync(registryPath)) return [];
-  const content = fs.readFileSync(registryPath, 'utf8');
-  return parseRegistryTable(content);
-}
 
 const countRecentFoxmemoryErrors = (): ErrorSamples => {
   if (!fs.existsSync(gatewayErrLogPath)) return { count: 0, samples: [] };
@@ -433,18 +408,29 @@ app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-app.get('/api/registry', (_req: Request, res: Response) => {
-  const rows = loadRegistry();
-  const summary = {
-    total: rows.length,
-    spawned: rows.filter((r) => r['status'] === 'spawned').length,
-    running: rows.filter((r) => r['status'] === 'running').length,
-    completed: rows.filter((r) => r['status'] === 'completed').length,
-    failed: rows.filter((r) => r['status'] === 'failed').length,
-    silent: rows.filter((r) => r['status'] === 'silent').length,
-    killed: rows.filter((r) => r['status'] === 'killed').length,
-  };
-  res.json({ registryPath, summary, rows });
+app.get('/api/sessions', (_req: Request, res: Response) => {
+  try {
+    const raw = execFileSync('openclaw', ['sessions', '--all-agents', '--json'], {
+      cwd: workspaceRoot,
+      encoding: 'utf8',
+    });
+    const parsed = JSON.parse(raw) as { sessions?: OpenclawSession[] };
+    const all = parsed.sessions || [];
+
+    // Deduplicate by sessionId — when two keys share a sessionId (e.g. bare cron:<jobId>
+    // and its cron:<jobId>:run:<runId> alias), keep the more specific (longer) key.
+    const byId = new Map<string, OpenclawSession>();
+    for (const s of all) {
+      const existing = byId.get(s.sessionId);
+      if (!existing || s.key.length > existing.key.length) {
+        byId.set(s.sessionId, s);
+      }
+    }
+    const sessions = Array.from(byId.values());
+    res.json({ ok: true, sessions, total: sessions.length });
+  } catch (e: unknown) {
+    res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e), sessions: [] });
+  }
 });
 
 app.get('/api/foxmemory/overview', async (_req: Request, res: Response) => {
@@ -456,43 +442,23 @@ app.get('/api/foxmemory/overview', async (_req: Request, res: Response) => {
   }
 });
 
-app.post('/api/registry/kill', (req: Request<Record<string, never>, unknown, KillRequestBody>, res: Response) => {
-  const { runId, childSessionKey, reason } = req.body || {};
-  if (!runId) return res.status(400).json({ ok: false, error: 'runId is required' });
+app.post('/api/sessions/kill', (req: Request<Record<string, never>, unknown, KillRequestBody>, res: Response) => {
+  const { sessionKey, sessionId, reason } = req.body || {};
+  if (!sessionKey || !sessionId) return res.status(400).json({ ok: false, error: 'sessionKey and sessionId are required' });
 
   try {
     const killReason = reason || 'Manual kill requested from dashboard';
-    let attemptedImmediateKill = false;
     let immediateKillSucceeded = false;
     let immediateKillNote = '';
 
     try {
-      attemptedImmediateKill = true;
-      const sessionsJson = execFileSync('openclaw', ['sessions', '--all-agents', '--json'], {
-        cwd: workspaceRoot,
-        encoding: 'utf8',
-      });
-      const parsed = JSON.parse(sessionsJson) as { sessions?: { key: string; sessionId: string }[] };
-      const match = (parsed.sessions || []).find((s) => s.key === childSessionKey);
-
-      if (match?.sessionId) {
-        execFileSync(
-          'openclaw',
-          [
-            'agent',
-            '--session-id',
-            match.sessionId,
-            '--message',
-            'STOP NOW. Terminate this run immediately and do not continue execution.',
-            '--json',
-          ],
-          { cwd: workspaceRoot, encoding: 'utf8' }
-        );
-        immediateKillSucceeded = true;
-        immediateKillNote = `Immediate stop command sent to sessionId=${match.sessionId}`;
-      } else {
-        immediateKillNote = 'No matching sessionId found for child_session_key in CLI session list.';
-      }
+      execFileSync(
+        'openclaw',
+        ['agent', '--session-id', sessionId, '--message', 'STOP NOW. Terminate this run immediately and do not continue execution.', '--json'],
+        { cwd: workspaceRoot, encoding: 'utf8' }
+      );
+      immediateKillSucceeded = true;
+      immediateKillNote = `Immediate stop command sent to sessionId=${sessionId}`;
     } catch (e: unknown) {
       immediateKillNote = `Immediate kill attempt failed: ${e instanceof Error ? e.message : String(e)}`;
     }
@@ -500,40 +466,55 @@ app.post('/api/registry/kill', (req: Request<Record<string, never>, unknown, Kil
     if (!fs.existsSync(killQueuePath)) {
       fs.writeFileSync(
         killQueuePath,
-        '# ACP Kill Queue\n\n| requested_at_ct | run_id | child_session_key | reason | status |\n|---|---|---|---|---|\n'
+        '# ACP Kill Queue\n\n| requested_at_ct | session_key | session_id | reason | status |\n|---|---|---|---|---|\n'
       );
     }
 
     const requestedAt = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago', hour12: false });
     const queueStatus = immediateKillSucceeded ? 'attempted_immediate' : 'queued';
     const queueReason = `${killReason}. ${immediateKillNote}`.replace(/\|/g, '\\|');
-    const queueRow = `| ${requestedAt} | ${runId} | ${childSessionKey || ''} | ${queueReason} | ${queueStatus} |\n`;
+    const queueRow = `| ${requestedAt} | ${sessionKey} | ${sessionId} | ${queueReason} | ${queueStatus} |\n`;
     fs.appendFileSync(killQueuePath, queueRow);
 
-    execFileSync(updateScriptPath, [
-      '--run-id',
-      runId,
-      '--status',
-      'killed',
-      '--outcome',
-      immediateKillSucceeded
-        ? `${killReason} (immediate stop attempted)`
-        : `${killReason} (queued; immediate stop unavailable)`,
-      '--artifacts',
-      'docs/ACP_KILL_QUEUE.md',
-    ]);
-
-    return res.json({
-      ok: true,
-      queued: !immediateKillSucceeded,
-      attemptedImmediateKill,
-      immediateKillSucceeded,
-      note: immediateKillNote,
-    });
+    return res.json({ ok: true, queued: !immediateKillSucceeded, immediateKillSucceeded, note: immediateKillNote });
   } catch (error: unknown) {
     return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
+
+app.post('/api/sessions/delete', (req: Request<Record<string, never>, unknown, { sessionKey: string; sessionId: string }>, res: Response) => {
+  const { sessionKey, sessionId } = req.body || {};
+  if (!sessionKey || !sessionId) return res.status(400).json({ ok: false, error: 'sessionKey and sessionId are required' });
+
+  try {
+    // Extract agentId from key pattern "agent:<agentId>:..."
+    const agentId = sessionKey.split(':')[1] ?? 'main';
+    const home = process.env.HOME || '';
+    const transcriptPath = path.join(home, '.openclaw', 'agents', agentId, 'sessions', `${sessionId}.jsonl`);
+
+    if (fs.existsSync(transcriptPath)) {
+      fs.unlinkSync(transcriptPath);
+    }
+
+    // Clean up the orphaned store entry
+    execFileSync('openclaw', ['sessions', 'cleanup', '--fix-missing', '--enforce', '--agent', agentId], {
+      encoding: 'utf8',
+    });
+
+    return res.json({ ok: true, deleted: true, transcriptPath });
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// Serve built web app in production
+const distPath = path.resolve(__dirname, '..', 'dist');
+if (process.env.NODE_ENV === 'production' && fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 
 const PORT = process.env.PORT || 8787;
 app.listen(PORT, () => {

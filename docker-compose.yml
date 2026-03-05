@@ -1,0 +1,18 @@
+services:
+  dashboard:
+    build: .
+    ports:
+      - "8787:8787"
+    environment:
+      - NODE_ENV=production
+      - WORKSPACE_ROOT=/workspace/app
+      - FOXMEMORY_BASE_URL=${FOXMEMORY_BASE_URL:-http://192.168.0.118:8082}
+      - FOXMEMORY_USER_ID=${FOXMEMORY_USER_ID:-thomastupper92618@gmail.com}
+      - HOME=/root
+    volumes:
+      # Data dirs inside the repo (docs/, artifacts/, scripts/)
+      - ./docs:/workspace/app/docs
+      - ./artifacts:/workspace/app/artifacts
+      - ./scripts:/workspace/app/scripts
+      # Gateway logs for FoxMemory event tracking
+      - ~/.openclaw:/root/.openclaw:ro

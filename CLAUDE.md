@@ -27,7 +27,7 @@ yarn build:web
 - Vite proxies `/api/*` → `http://localhost:8787`
 - RTK Query polls every 15s (`skipPollingIfUnfocused: true`)
 - UI preferences (theme, section, chartRange) persisted via redux-persist to localStorage
-- All file paths in the server resolve relative to workspace root (`path.resolve(__dirname, '..', '..')` — two levels above `server/`)
+- All file paths in the server resolve relative to `workspaceRoot`, which defaults to `path.resolve(__dirname, '..')` (repo root) and can be overridden with `WORKSPACE_ROOT` env var
 
 ## Data sources (server)
 - `docs/ACP_SESSION_REGISTRY.md` — parsed markdown table
