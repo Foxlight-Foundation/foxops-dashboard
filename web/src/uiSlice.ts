@@ -12,7 +12,7 @@ const initialState: UiState = {
     typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
       ? 'dark'
       : 'light',
-  section: 'acp',
+  section: 'foxmemory',
   chartRange: '7d',
 };
 

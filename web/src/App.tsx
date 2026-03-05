@@ -89,18 +89,22 @@ const SidebarDrawer = styled(Drawer)(({ theme }) => ({
     boxSizing: 'border-box',
     borderRight: 0,
     padding: theme.spacing(2),
+    boxShadow:
+      theme.palette.mode === 'dark'
+        ? '4px 0 16px rgba(0,0,0,0.4)'
+        : '4px 0 16px rgba(0,0,0,0.06)',
   },
 }));
 
 const LogoBar = styled(Box)({
   height: 44,
-  borderRadius: 24,
+  borderRadius: 10,
   background: 'linear-gradient(135deg, #5e72e4 0%, #825ee4 100%)',
   color: 'white',
   display: 'flex',
   alignItems: 'center',
-  paddingLeft: 12,
-  paddingRight: 12,
+  paddingLeft: 10,
+  paddingRight: 10,
   marginBottom: 8,
 });
 
@@ -122,11 +126,12 @@ const GlassAppBar = styled(AppBar)(({ theme }) => ({
 
 const StyledStatCard = styled(Card)(({ theme }) => ({
   border: `1px solid ${theme.palette.divider}`,
-  borderRadius: theme.shape.borderRadius * 3,
-  background:
+  borderRadius: theme.shape.borderRadius,
+  backgroundColor: theme.palette.background.paper,
+  boxShadow:
     theme.palette.mode === 'dark'
-      ? 'linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0))'
-      : 'linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.65))',
+      ? '0 4px 20px rgba(0,0,0,0.35)'
+      : '0 4px 20px rgba(0,0,0,0.07)',
 }));
 
 const StatCardContent = styled(CardContent)({
@@ -137,13 +142,15 @@ const StatCardContent = styled(CardContent)({
 const StatCardIconBox = styled(Box, {
   shouldForwardProp: (prop) => prop !== 'iconColor',
 })<{ iconColor: string }>(({ iconColor }) => ({
-  width: 44,
-  height: 44,
-  borderRadius: 16,
+  width: 56,
+  height: 56,
+  borderRadius: 10,
+  flexShrink: 0,
   display: 'grid',
   placeItems: 'center',
   color: 'white',
   background: iconColor,
+  boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
 }));
 
 const MonoTableCell = styled(TableCell)({
@@ -159,6 +166,10 @@ const LogPaper = styled(Paper, {
   overflow: 'auto',
   backgroundColor: theme.palette.background.default,
 }));
+
+const LogoBox = styled(Box)({
+  padding: '0 0 8px'
+});
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
@@ -186,16 +197,20 @@ const StatCard = ({ title, value, icon, iconColor }: StatCardProps) => {
   return (
     <StyledStatCard elevation={0}>
       <StatCardContent>
-        <Box display="flex" alignItems="center" justifyContent="space-between">
+        <Box display="flex" alignItems="center" gap={2}>
+          <StatCardIconBox iconColor={iconColor}>{icon}</StatCardIconBox>
           <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ textTransform: 'uppercase', letterSpacing: '0.06em', fontSize: '0.65rem', display: 'block' }}
+            >
               {title}
             </Typography>
-            <Typography variant="h5" fontWeight={700}>
+            <Typography variant="h5" fontWeight={700} sx={{ lineHeight: 1.25, mt: 0.25 }}>
               {value}
             </Typography>
           </Box>
-          <StatCardIconBox iconColor={iconColor}>{icon}</StatCardIconBox>
         </Box>
       </StatCardContent>
     </StyledStatCard>
@@ -249,7 +264,8 @@ const App = () => {
           primary: { main: mode === 'dark' ? '#5e72e4' : '#344767' },
           background: mode === 'dark' ? { default: '#111827', paper: '#1f2937' } : { default: '#f8f9fa', paper: '#fff' },
         },
-        shape: { borderRadius: 12 },
+        shape: { borderRadius: 10 },
+        typography: { fontFamily: '"DM Sans", sans-serif' },
       }),
     [mode],
   );
@@ -339,21 +355,21 @@ const App = () => {
       <CssBaseline />
       <AppShell>
         <SidebarDrawer variant="permanent">
-          <Box px={1} pb={1.5}>
+          <LogoBox px={1} pb={1.5}>
             <LogoBar>
               <LogoAvatar>
                 <Typography component="span" sx={{ fontSize: 14, lineHeight: 1 }}>🦊</Typography>
               </LogoAvatar>
               <Typography variant="subtitle2" fontWeight={700}>FoxOps</Typography>
             </LogoBar>
-          </Box>
+          </LogoBox>
           <Divider sx={{ mb: 1.5 }} />
           <List sx={{ gap: 0.7, display: 'grid' }}>
-            <ListItemButton selected={section === 'acp'} onClick={() => dispatch(setSection('acp'))} sx={{ borderRadius: 2 }}>
-              <ListItemIcon><DashboardRoundedIcon /></ListItemIcon><ListItemText primary="ACP Sessions" />
-            </ListItemButton>
-            <ListItemButton selected={section === 'foxmemory'} onClick={() => dispatch(setSection('foxmemory'))} sx={{ borderRadius: 2 }}>
+            <ListItemButton selected={section === 'foxmemory'} onClick={() => dispatch(setSection('foxmemory'))} sx={{ borderRadius: 1 }}>
               <ListItemIcon><HubRoundedIcon /></ListItemIcon><ListItemText primary="FoxMemory" />
+            </ListItemButton>
+            <ListItemButton selected={section === 'acp'} onClick={() => dispatch(setSection('acp'))} sx={{ borderRadius: 1 }}>
+              <ListItemIcon><DashboardRoundedIcon /></ListItemIcon><ListItemText primary="ACP Sessions" />
             </ListItemButton>
           </List>
 
@@ -368,9 +384,14 @@ const App = () => {
           <GlassAppBar position="sticky" color="transparent" elevation={0}>
             <Toolbar>
               <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="h6" fontWeight={700}>FoxOps</Typography>
+                <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 1, fontSize: '0.65rem' }}>
+                  FoxOps
+                </Typography>
+                <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.2, mb: 0.25 }}>
+                  {section === 'acp' ? 'ACP Sessions' : 'FoxMemory'}
+                </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {section === 'acp' ? `Source: ${registryData?.registryPath || 'Loading…'}` : `Source: ${foxmemory?.baseUrl || 'Loading…'}`} · Last refresh: {lastRefreshLabel}
+                  {section === 'acp' ? registryData?.registryPath || 'Loading…' : foxmemory?.baseUrl || 'Loading…'} · {lastRefreshLabel}
                 </Typography>
               </Box>
               {apiErrorText ? (
@@ -418,7 +439,7 @@ const App = () => {
                   <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="silent" value={summary?.silent ?? 0} icon={<PauseCircleRoundedIcon fontSize="small" />} iconColor={grad('#fb6340', '#fbb140')} /></Grid>
                 </Grid>
 
-                <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 3, overflow: 'hidden' }}>
+                <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
                   <Table size="small" stickyHeader>
                     <TableHead><TableRow><TableCell>Created (CT)</TableCell><TableCell>Purpose</TableCell><TableCell>Status</TableCell><TableCell>Run ID</TableCell><TableCell>Child Session</TableCell><TableCell>Done (CT)</TableCell><TableCell>Outcome</TableCell><TableCell align="right">Action</TableCell></TableRow></TableHead>
                     <TableBody>
@@ -446,7 +467,7 @@ const App = () => {
                   <Grid item xs={12} sm={6} md={3}><StatCard title="api health" value={foxmemory?.api?.ok ? 'healthy' : 'degraded'} icon={<MemoryRoundedIcon fontSize="small" />} iconColor={foxmemory?.api?.ok ? grad('#2dce89', '#2dbd5a') : grad('#f5365c', '#f56036')} /></Grid>
                 </Grid>
 
-                <Card elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 3, mb: 1.5 }}>
+                <Card elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mb: 1.5 }}>
                   <CardContent sx={{ p: 2 }}>
                     <Typography variant="subtitle2" fontWeight={700}>Auto-capture health</Typography>
                     <Typography variant="body2" color="text.secondary">
@@ -463,7 +484,7 @@ const App = () => {
 
                 <Grid container spacing={1.5}>
                   <Grid item xs={12} lg={7}>
-                    <Card elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 3, height: '100%' }}>
+                    <Card elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, height: '100%' }}>
                       <CardContent sx={{ p: 3 }}>
                         <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                           <Typography variant="h6" fontWeight={700}>Memories stored by day</Typography>
@@ -488,7 +509,7 @@ const App = () => {
                     </Card>
                   </Grid>
                   <Grid item xs={12} lg={5}>
-                    <Card elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 3, height: '100%' }}>
+                    <Card elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, height: '100%' }}>
                       <CardContent sx={{ p: 3 }}>
                         <Typography variant="h6" fontWeight={700} gutterBottom>FoxMemory details</Typography>
                         <Typography color="text.secondary">Base URL: {foxmemory?.baseUrl || '—'}</Typography>
