@@ -437,6 +437,21 @@ app.get('/api/sessions', (_req: Request, res: Response) => {
   }
 });
 
+app.get('/api/crons', (_req: Request, res: Response) => {
+  try {
+    const raw = execFileSync('openclaw', ['cron', 'list', '--json'], {
+      encoding: 'utf8',
+    });
+    // openclaw cron writes config warnings to stdout before the JSON — extract just the JSON object
+    const jsonStart = raw.indexOf('{');
+    const jsonStr = jsonStart >= 0 ? raw.slice(jsonStart) : raw;
+    const parsed = JSON.parse(jsonStr) as { jobs?: unknown[]; total?: number };
+    res.json({ ok: true, jobs: parsed.jobs || [], total: parsed.total ?? (parsed.jobs || []).length });
+  } catch (e: unknown) {
+    res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e), jobs: [] });
+  }
+});
+
 app.get('/api/foxmemory/overview', async (_req: Request, res: Response) => {
   try {
     const overview = await probeFoxmemory();

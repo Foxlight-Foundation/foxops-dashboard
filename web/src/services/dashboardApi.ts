@@ -1,10 +1,10 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { SessionsResponse, FoxmemoryResponse, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse } from '../types';
+import type { SessionsResponse, FoxmemoryResponse, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse, CronJobsResponse } from '../types';
 
 export const dashboardApi = createApi({
   reducerPath: 'dashboardApi',
   baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
-  tagTypes: ['Sessions', 'Foxmemory'],
+  tagTypes: ['Sessions', 'Foxmemory', 'Crons'],
   endpoints: (builder) => ({
     getSessions: builder.query<SessionsResponse, void>({
       query: () => '/sessions',
@@ -13,6 +13,10 @@ export const dashboardApi = createApi({
     getFoxmemoryOverview: builder.query<FoxmemoryResponse, void>({
       query: () => '/foxmemory/overview',
       providesTags: ['Foxmemory'],
+    }),
+    getCrons: builder.query<CronJobsResponse, void>({
+      query: () => '/crons',
+      providesTags: ['Crons'],
     }),
     killSession: builder.mutation<KillResponse, KillArgs>({
       query: ({ sessionKey, sessionId, reason }) => ({
@@ -36,6 +40,7 @@ export const dashboardApi = createApi({
 export const {
   useGetSessionsQuery,
   useGetFoxmemoryOverviewQuery,
+  useGetCronsQuery,
   useKillSessionMutation,
   useDeleteSessionMutation,
 } = dashboardApi;

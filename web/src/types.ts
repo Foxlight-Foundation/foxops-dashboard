@@ -68,8 +68,50 @@ export interface FoxmemoryResponse {
   stats: FoxmemoryStats | null;
 }
 
+export interface CronJobSchedule {
+  kind: string;
+  everyMs?: number;
+  anchorMs?: number;
+  cron?: string;
+  timezone?: string;
+}
+
+export interface CronJobState {
+  nextRunAtMs?: number | null;
+  lastRunAtMs?: number | null;
+  lastRunStatus?: string | null;
+  lastStatus?: string | null;
+  lastDurationMs?: number | null;
+  lastDelivered?: boolean | null;
+  lastDeliveryStatus?: string | null;
+  consecutiveErrors?: number;
+}
+
+export interface CronJob {
+  id: string;
+  agentId: string;
+  name: string;
+  enabled: boolean;
+  createdAtMs?: number;
+  updatedAtMs?: number;
+  schedule?: CronJobSchedule;
+  sessionTarget?: string;
+  wakeMode?: string;
+  payload?: { kind: string; message?: string; timeoutSeconds?: number; [key: string]: unknown };
+  delivery?: { mode?: string; channel?: string; [key: string]: unknown };
+  state?: CronJobState;
+  [key: string]: unknown;
+}
+
+export interface CronJobsResponse {
+  ok: boolean;
+  jobs: CronJob[];
+  total: number;
+  error?: string;
+}
+
 export type ThemeMode = 'light' | 'dark';
-export type Section = 'acp' | 'foxmemory';
+export type Section = 'acp' | 'foxmemory' | 'cron';
 export type ChartRange = '7d' | '30d' | 'all';
 
 export interface Notice {
