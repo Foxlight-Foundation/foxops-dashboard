@@ -166,7 +166,7 @@ interface StatusBadgeProps {
   value: string | null | undefined;
 }
 
-function StatusBadge({ value }: StatusBadgeProps) {
+const StatusBadge = ({ value }: StatusBadgeProps) => {
   const key = (value || 'unknown').toLowerCase();
   return (
     <Tooltip title={STATUS_HELP[key] || 'Unknown status'} arrow>
@@ -182,7 +182,7 @@ interface StatCardProps {
   iconColor: string;
 }
 
-function StatCard({ title, value, icon, iconColor }: StatCardProps) {
+const StatCard = ({ title, value, icon, iconColor }: StatCardProps) => {
   return (
     <StyledStatCard elevation={0}>
       <StatCardContent>
@@ -206,7 +206,7 @@ function StatCard({ title, value, icon, iconColor }: StatCardProps) {
 
 type RtkError = { data?: { error?: string }; error?: string; message?: string } | undefined;
 
-export default function App() {
+const App = () => {
   const dispatch = useDispatch();
   const { mode, section, chartRange } = useSelector((s: RootState) => s.ui);
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -562,4 +562,6 @@ export default function App() {
       </AppShell>
     </ThemeProvider>
   );
-}
+};
+
+export default App;

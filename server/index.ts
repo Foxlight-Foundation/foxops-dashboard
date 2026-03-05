@@ -116,7 +116,7 @@ interface KillRequestBody {
 
 // ── Data loading ───────────────────────────────────────────────────────────────
 
-function parseRegistryTable(md: string): RegistryRow[] {
+const parseRegistryTable = (md: string): RegistryRow[] => {
   const lines = md.split('\n');
   const tableLines = lines.filter((l) => l.trim().startsWith('|'));
   if (tableLines.length < 3) return [];
@@ -142,20 +142,20 @@ function parseRegistryTable(md: string): RegistryRow[] {
   });
 }
 
-function loadRegistry(): RegistryRow[] {
+const loadRegistry = (): RegistryRow[] => {
   if (!fs.existsSync(registryPath)) return [];
   const content = fs.readFileSync(registryPath, 'utf8');
   return parseRegistryTable(content);
 }
 
-function countRecentFoxmemoryErrors(): ErrorSamples {
+const countRecentFoxmemoryErrors = (): ErrorSamples => {
   if (!fs.existsSync(gatewayErrLogPath)) return { count: 0, samples: [] };
   const lines = fs.readFileSync(gatewayErrLogPath, 'utf8').split('\n').slice(-1500);
   const matches = lines.filter((l) => /foxmemory|mem0|qdrant|memory api/i.test(l));
   return { count: matches.length, samples: matches.slice(-5) };
 }
 
-function loadLatestRetrievalQuality(): RetrievalQuality {
+const loadLatestRetrievalQuality = (): RetrievalQuality => {
   if (!fs.existsSync(artifactsDir)) return { value: '—', source: 'no artifacts dir' };
   const files = fs
     .readdirSync(artifactsDir)
@@ -179,7 +179,7 @@ function loadLatestRetrievalQuality(): RetrievalQuality {
   }
 }
 
-function readLogTailLines(filePath: string, maxBytes = 2 * 1024 * 1024): string[] {
+const readLogTailLines = (filePath: string, maxBytes = 2 * 1024 * 1024): string[] => {
   const st = fs.statSync(filePath);
   const size = st.size;
   const start = Math.max(0, size - maxBytes);
@@ -194,7 +194,7 @@ function readLogTailLines(filePath: string, maxBytes = 2 * 1024 * 1024): string[
   }
 }
 
-function loadAutoCaptureHealth(windowMinutes = 60): AutoCaptureHealth {
+const loadAutoCaptureHealth = (windowMinutes = 60): AutoCaptureHealth => {
   if (!fs.existsSync(gatewayLogPath)) {
     return {
       lastAutoCaptureAt: null,
@@ -244,7 +244,7 @@ function loadAutoCaptureHealth(windowMinutes = 60): AutoCaptureHealth {
   };
 }
 
-function loadPluginTelemetry(windowMinutes = 60): PluginTelemetry {
+const loadPluginTelemetry = (windowMinutes = 60): PluginTelemetry => {
   if (!fs.existsSync(gatewayLogPath)) {
     return {
       windowMinutes,
@@ -315,7 +315,7 @@ function loadPluginTelemetry(windowMinutes = 60): PluginTelemetry {
   return out;
 }
 
-function loadPluginLogTail(limit = 120): PluginLogs {
+const loadPluginLogTail = (limit = 120): PluginLogs => {
   if (!fs.existsSync(gatewayLogPath)) {
     return { file: gatewayLogPath, count: 0, lines: [] };
   }
@@ -330,7 +330,7 @@ function loadPluginLogTail(limit = 120): PluginLogs {
   };
 }
 
-function buildLastNDaysSeries(series: DaySeries[], days = 7): DaySeries[] {
+const buildLastNDaysSeries = (series: DaySeries[], days = 7): DaySeries[] => {
   const map = Object.fromEntries((series || []).map((d) => [d.day, d.count]));
   const out: DaySeries[] = [];
   const now = new Date();
@@ -343,7 +343,7 @@ function buildLastNDaysSeries(series: DaySeries[], days = 7): DaySeries[] {
   return out;
 }
 
-async function probeFoxmemory(): Promise<FoxmemoryOverview> {
+const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
   const endpoints = ['/health', '/v1/health', '/'];
   let api: ApiResult = { ok: false, status: null, endpoint: null };
 
