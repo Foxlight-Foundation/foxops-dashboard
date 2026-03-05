@@ -12,6 +12,7 @@ const killQueuePath = path.join(workspaceRoot, 'docs', 'ACP_KILL_QUEUE.md');
 const foxmemoryBaseUrl = process.env.FOXMEMORY_BASE_URL || 'http://192.168.0.118:8082';
 const foxmemoryUserId = process.env.FOXMEMORY_USER_ID || 'thomastupper92618@gmail.com';
 const gatewayErrLogPath = path.join(process.env.HOME || '', '.openclaw', 'logs', 'gateway.err.log');
+const pluginLogMatch = /foxmemory-openclaw-memory|foxmemory-plugin-v2/i;
 const gatewayLogPath = path.join(process.env.HOME || '', '.openclaw', 'logs', 'gateway.log');
 const artifactsDir = path.join(workspaceRoot, 'artifacts');
 
@@ -180,8 +181,8 @@ const loadAutoCaptureHealth = (windowMinutes = 60): AutoCaptureHealth => {
   }
 
   const lines = readLogTailLines(gatewayLogPath, 2 * 1024 * 1024);
-  const successNeedle = 'foxmemory-openclaw-memory: auto-captured memory payload';
-  const errorNeedle = 'foxmemory-openclaw-memory capture failed:';
+  const successNeedle = 'auto-captured';
+  const errorNeedle = 'capture failed:';
 
   let lastAutoCaptureAt: string | null = null;
   let lastCaptureError: { at: string; line: string } | null = null;
@@ -254,7 +255,7 @@ const loadPluginTelemetry = (windowMinutes = 60): PluginTelemetry => {
   };
 
   for (const line of lines) {
-    if (!line || !line.includes('foxmemory-openclaw-memory')) continue;
+    if (!line || !pluginLogMatch.test(line)) continue;
     const ts = line.slice(0, 24).trim();
     const t = Date.parse(ts);
     if (Number.isFinite(t) && now - t > windowMs) continue;
@@ -269,7 +270,7 @@ const loadPluginTelemetry = (windowMinutes = 60): PluginTelemetry => {
         out.lastEndpoint = '/memory.raw_write';
       } else {
         out.modeInfer += 1;
-        out.lastEndpoint = '/v1/memories';
+        out.lastEndpoint = line.includes('/v2/') ? '/v2/memories' : '/v1/memories';
       }
       out.recent.push({ at: Number.isFinite(t) ? new Date(t).toISOString() : ts, type: 'capture_success', mode });
     } else if (line.includes('capture none')) {
@@ -296,7 +297,7 @@ const loadPluginLogTail = (limit = 120): PluginLogs => {
   }
 
   const lines = readLogTailLines(gatewayLogPath, 2 * 1024 * 1024)
-    .filter((line) => line.includes('foxmemory-openclaw-memory'));
+    .filter((line) => pluginLogMatch.test(line));
 
   return {
     file: gatewayLogPath,
@@ -335,8 +336,10 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
   let queueDepth: number | null = null;
   let foxmemoryStats: FoxmemoryStats | null = null;
   try {
-    const statsRes = await fetch(`${foxmemoryBaseUrl}/stats`, { method: 'GET' });
-    if (statsRes.ok) {
+    const statsEndpoints = ['/stats', '/v2/stats'];
+    for (const ep of statsEndpoints) {
+      const statsRes = await fetch(`${foxmemoryBaseUrl}${ep}`, { method: 'GET' });
+      if (!statsRes.ok) continue;
       const stats = (await statsRes.json()) as FoxmemoryStats;
       foxmemoryStats = stats;
       queueDepth =
@@ -345,6 +348,7 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
         stats?.queueDepth ??
         stats?.queue_depth ??
         null;
+      break;
     }
   } catch {
     // optional probe
@@ -356,8 +360,8 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
     u.searchParams.set('user_id', foxmemoryUserId);
     const memRes = await fetch(u.toString(), { method: 'GET' });
     if (memRes.ok) {
-      const payload = (await memRes.json()) as { results?: MemoryItem[] };
-      memories = payload?.results || [];
+      const payload = (await memRes.json()) as any;
+      memories = Array.isArray(payload) ? payload : (payload?.results || payload?.data || []);
     }
   } catch {
     // optional probe
