@@ -119,9 +119,11 @@ const LogoAvatar = styled(Box)({
 });
 
 const GlassAppBar = styled(AppBar)(({ theme }) => ({
-  backdropFilter: 'blur(8px)',
+  backdropFilter: 'blur(16px)',
   borderBottom: `1px solid ${theme.palette.divider}`,
   backgroundColor: alpha(theme.palette.background.default, 0.72),
+  height: '78px',
+  justifyContent: 'center'
 }));
 
 const StyledStatCard = styled(Card)(({ theme }) => ({
@@ -265,7 +267,7 @@ const App = () => {
           background: mode === 'dark' ? { default: '#111827', paper: '#1f2937' } : { default: '#f8f9fa', paper: '#fff' },
         },
         shape: { borderRadius: 10 },
-        typography: { fontFamily: '"DM Sans", sans-serif' },
+        typography: { fontFamily: '"Ubuntu", sans-serif' },
       }),
     [mode],
   );
@@ -384,9 +386,6 @@ const App = () => {
           <GlassAppBar position="sticky" color="transparent" elevation={0}>
             <Toolbar>
               <Box sx={{ flexGrow: 1 }}>
-                <Typography variant="overline" color="text.secondary" sx={{ lineHeight: 1, fontSize: '0.65rem' }}>
-                  FoxOps
-                </Typography>
                 <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.2, mb: 0.25 }}>
                   {section === 'acp' ? 'ACP Sessions' : 'FoxMemory'}
                 </Typography>
