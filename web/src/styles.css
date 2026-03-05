@@ -1,0 +1,22 @@
+body { font-family: Inter, system-ui, sans-serif; margin: 0; background: #0f1115; color: #e8e8e8; }
+.wrap { padding: 20px; }
+h1 { margin-top: 0; }
+.muted { color: #9aa0aa; }
+.cards { display: grid; grid-template-columns: repeat(7, minmax(80px, 1fr)); gap: 10px; margin: 14px 0; }
+.card { background: #1a1e26; border: 1px solid #303744; border-radius: 10px; padding: 10px; }
+.label { color: #9aa0aa; font-size: 12px; text-transform: capitalize; }
+.value { font-size: 20px; font-weight: 700; }
+.toolbar { margin-bottom: 12px; }
+button { background: #2e6cff; color: white; border: none; padding: 8px 12px; border-radius: 8px; cursor: pointer; }
+button.kill { background: #8f1f2c; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+table { width: 100%; border-collapse: collapse; background: #131722; border: 1px solid #303744; }
+th, td { border-bottom: 1px solid #262d3a; padding: 8px; text-align: left; vertical-align: top; }
+th { background: #1a1f2b; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
+.badge { padding: 2px 8px; border-radius: 999px; font-size: 12px; border: 1px solid #3b4252; }
+.badge.completed { background: #11351d; color: #84e39e; }
+.badge.failed { background: #3f1515; color: #ff9e9e; }
+.badge.running, .badge.spawned { background: #182a4a; color: #9cc2ff; }
+.badge.silent { background: #3a2f10; color: #ffd78a; }
+.badge.killed { background: #3b243a; color: #f1b3ff; }
