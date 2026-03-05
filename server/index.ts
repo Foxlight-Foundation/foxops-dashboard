@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
@@ -17,7 +17,106 @@ const gatewayErrLogPath = path.join(process.env.HOME || '', '.openclaw', 'logs',
 const gatewayLogPath = path.join(process.env.HOME || '', '.openclaw', 'logs', 'gateway.log');
 const artifactsDir = path.join(workspaceRoot, 'artifacts');
 
-function parseRegistryTable(md) {
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+interface RegistryRow {
+  [key: string]: string;
+}
+
+interface RetrievalQuality {
+  value: string;
+  source: string;
+  raw?: { total: number; searchable: number };
+}
+
+interface ErrorSamples {
+  count: number;
+  samples: string[];
+}
+
+interface AutoCaptureHealth {
+  lastAutoCaptureAt: string | null;
+  captureSuccessCountWindow: number;
+  captureWindowMinutes: number;
+  lastCaptureError: { at: string; line: string } | null;
+}
+
+interface PluginTelemetryEvent {
+  at: string;
+  type: string;
+  mode?: string;
+}
+
+interface PluginTelemetry {
+  windowMinutes: number;
+  captureAttempts: number;
+  captureSuccess: number;
+  captureNone: number;
+  captureFailed: number;
+  recallFailed: number;
+  modeInfer: number;
+  modeRaw: number;
+  lastCaptureMode: string | null;
+  lastEndpoint: string | null;
+  recent: PluginTelemetryEvent[];
+}
+
+interface PluginLogs {
+  file: string;
+  count: number;
+  lines: string[];
+}
+
+interface DaySeries {
+  day: string;
+  count: number;
+}
+
+interface ApiResult {
+  ok: boolean;
+  status: number | null;
+  endpoint: string | null;
+}
+
+interface MemoryItem {
+  createdAt?: string;
+  [key: string]: unknown;
+}
+
+interface FoxmemoryStats {
+  writesByMode?: { infer?: number; raw?: number };
+  memoryEvents?: { ADD?: number; UPDATE?: number; DELETE?: number; NONE?: number };
+  ingestionQueueDepth?: number;
+  ingestion_queue_depth?: number;
+  queueDepth?: number;
+  queue_depth?: number;
+}
+
+interface FoxmemoryOverview {
+  baseUrl: string;
+  userId: string;
+  api: ApiResult;
+  ingestionQueueDepth: number | null;
+  memoryCount: number;
+  memoriesByDay: DaySeries[];
+  memoriesByDay7d: DaySeries[];
+  retrievalQuality: RetrievalQuality;
+  recentErrors: ErrorSamples;
+  autoCapture: AutoCaptureHealth;
+  pluginTelemetry: PluginTelemetry;
+  pluginLogs: PluginLogs;
+  stats: FoxmemoryStats | null;
+}
+
+interface KillRequestBody {
+  runId?: string;
+  childSessionKey?: string;
+  reason?: string;
+}
+
+// ── Data loading ───────────────────────────────────────────────────────────────
+
+function parseRegistryTable(md: string): RegistryRow[] {
   const lines = md.split('\n');
   const tableLines = lines.filter((l) => l.trim().startsWith('|'));
   if (tableLines.length < 3) return [];
@@ -35,7 +134,7 @@ function parseRegistryTable(md) {
   );
 
   return rows.map((cols) => {
-    const obj = {};
+    const obj: RegistryRow = {};
     header.forEach((h, i) => {
       obj[h] = cols[i] ?? '';
     });
@@ -43,20 +142,20 @@ function parseRegistryTable(md) {
   });
 }
 
-function loadRegistry() {
+function loadRegistry(): RegistryRow[] {
   if (!fs.existsSync(registryPath)) return [];
   const content = fs.readFileSync(registryPath, 'utf8');
   return parseRegistryTable(content);
 }
 
-function countRecentFoxmemoryErrors() {
+function countRecentFoxmemoryErrors(): ErrorSamples {
   if (!fs.existsSync(gatewayErrLogPath)) return { count: 0, samples: [] };
   const lines = fs.readFileSync(gatewayErrLogPath, 'utf8').split('\n').slice(-1500);
   const matches = lines.filter((l) => /foxmemory|mem0|qdrant|memory api/i.test(l));
   return { count: matches.length, samples: matches.slice(-5) };
 }
 
-function loadLatestRetrievalQuality() {
+function loadLatestRetrievalQuality(): RetrievalQuality {
   if (!fs.existsSync(artifactsDir)) return { value: '—', source: 'no artifacts dir' };
   const files = fs
     .readdirSync(artifactsDir)
@@ -68,9 +167,10 @@ function loadLatestRetrievalQuality() {
   const latest = files[files.length - 1];
   const fullPath = path.join(artifactsDir, latest);
   try {
-    const json = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
-    const total = Number(json?.totals?.writes_attempted ?? json?.n ?? 0);
-    const searchable = Number(json?.totals?.searchable_immediate ?? json?.totals?.searchable ?? 0);
+    const json = JSON.parse(fs.readFileSync(fullPath, 'utf8')) as Record<string, unknown>;
+    const totals = json?.totals as Record<string, unknown> | undefined;
+    const total = Number(totals?.writes_attempted ?? json?.n ?? 0);
+    const searchable = Number(totals?.searchable_immediate ?? totals?.searchable ?? 0);
     if (!total) return { value: '—', source: latest };
     const pct = Math.round((searchable / total) * 100);
     return { value: `${pct}%`, source: latest, raw: { total, searchable } };
@@ -79,7 +179,7 @@ function loadLatestRetrievalQuality() {
   }
 }
 
-function readLogTailLines(filePath, maxBytes = 2 * 1024 * 1024) {
+function readLogTailLines(filePath: string, maxBytes = 2 * 1024 * 1024): string[] {
   const st = fs.statSync(filePath);
   const size = st.size;
   const start = Math.max(0, size - maxBytes);
@@ -94,7 +194,7 @@ function readLogTailLines(filePath, maxBytes = 2 * 1024 * 1024) {
   }
 }
 
-function loadAutoCaptureHealth(windowMinutes = 60) {
+function loadAutoCaptureHealth(windowMinutes = 60): AutoCaptureHealth {
   if (!fs.existsSync(gatewayLogPath)) {
     return {
       lastAutoCaptureAt: null,
@@ -108,8 +208,8 @@ function loadAutoCaptureHealth(windowMinutes = 60) {
   const successNeedle = 'foxmemory-openclaw-memory: auto-captured memory payload';
   const errorNeedle = 'foxmemory-openclaw-memory capture failed:';
 
-  let lastAutoCaptureAt = null;
-  let lastCaptureError = null;
+  let lastAutoCaptureAt: string | null = null;
+  let lastCaptureError: { at: string; line: string } | null = null;
   let captureSuccessCountWindow = 0;
   const now = Date.now();
   const windowMs = windowMinutes * 60 * 1000;
@@ -144,7 +244,7 @@ function loadAutoCaptureHealth(windowMinutes = 60) {
   };
 }
 
-function loadPluginTelemetry(windowMinutes = 60) {
+function loadPluginTelemetry(windowMinutes = 60): PluginTelemetry {
   if (!fs.existsSync(gatewayLogPath)) {
     return {
       windowMinutes,
@@ -164,7 +264,7 @@ function loadPluginTelemetry(windowMinutes = 60) {
   const lines = readLogTailLines(gatewayLogPath, 2 * 1024 * 1024);
   const now = Date.now();
   const windowMs = windowMinutes * 60 * 1000;
-  const out = {
+  const out: PluginTelemetry = {
     windowMinutes,
     captureAttempts: 0,
     captureSuccess: 0,
@@ -215,13 +315,9 @@ function loadPluginTelemetry(windowMinutes = 60) {
   return out;
 }
 
-function loadPluginLogTail(limit = 120) {
+function loadPluginLogTail(limit = 120): PluginLogs {
   if (!fs.existsSync(gatewayLogPath)) {
-    return {
-      file: gatewayLogPath,
-      count: 0,
-      lines: [],
-    };
+    return { file: gatewayLogPath, count: 0, lines: [] };
   }
 
   const lines = readLogTailLines(gatewayLogPath, 2 * 1024 * 1024)
@@ -234,9 +330,9 @@ function loadPluginLogTail(limit = 120) {
   };
 }
 
-function buildLastNDaysSeries(series, days = 7) {
+function buildLastNDaysSeries(series: DaySeries[], days = 7): DaySeries[] {
   const map = Object.fromEntries((series || []).map((d) => [d.day, d.count]));
-  const out = [];
+  const out: DaySeries[] = [];
   const now = new Date();
   for (let i = days - 1; i >= 0; i -= 1) {
     const d = new Date(now);
@@ -247,9 +343,9 @@ function buildLastNDaysSeries(series, days = 7) {
   return out;
 }
 
-async function probeFoxmemory() {
+async function probeFoxmemory(): Promise<FoxmemoryOverview> {
   const endpoints = ['/health', '/v1/health', '/'];
-  let api = { ok: false, status: null, endpoint: null };
+  let api: ApiResult = { ok: false, status: null, endpoint: null };
 
   for (const ep of endpoints) {
     try {
@@ -261,12 +357,12 @@ async function probeFoxmemory() {
     }
   }
 
-  let queueDepth = null;
-  let foxmemoryStats = null;
+  let queueDepth: number | null = null;
+  let foxmemoryStats: FoxmemoryStats | null = null;
   try {
     const statsRes = await fetch(`${foxmemoryBaseUrl}/stats`, { method: 'GET' });
     if (statsRes.ok) {
-      const stats = await statsRes.json();
+      const stats = (await statsRes.json()) as FoxmemoryStats;
       foxmemoryStats = stats;
       queueDepth =
         stats?.ingestionQueueDepth ??
@@ -279,20 +375,20 @@ async function probeFoxmemory() {
     // optional probe
   }
 
-  let memories = [];
+  let memories: MemoryItem[] = [];
   try {
     const u = new URL(`${foxmemoryBaseUrl}/v1/memories`);
     u.searchParams.set('user_id', foxmemoryUserId);
     const memRes = await fetch(u.toString(), { method: 'GET' });
     if (memRes.ok) {
-      const payload = await memRes.json();
+      const payload = (await memRes.json()) as { results?: MemoryItem[] };
       memories = payload?.results || [];
     }
   } catch {
     // optional probe
   }
 
-  const byDay = memories.reduce((acc, m) => {
+  const byDay = memories.reduce<Record<string, number>>((acc, m) => {
     const d = m?.createdAt ? new Date(m.createdAt) : null;
     if (!d || Number.isNaN(d.getTime())) return acc;
     const day = d.toISOString().slice(0, 10);
@@ -300,7 +396,7 @@ async function probeFoxmemory() {
     return acc;
   }, {});
 
-  const dailySeries = Object.entries(byDay)
+  const dailySeries: DaySeries[] = Object.entries(byDay)
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([day, count]) => ({ day, count }));
 
@@ -327,43 +423,40 @@ async function probeFoxmemory() {
   };
 }
 
+// ── Express app ────────────────────────────────────────────────────────────────
+
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/api/health', (_req, res) => {
+app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-app.get('/api/registry', (_req, res) => {
+app.get('/api/registry', (_req: Request, res: Response) => {
   const rows = loadRegistry();
   const summary = {
     total: rows.length,
-    spawned: rows.filter((r) => r.status === 'spawned').length,
-    running: rows.filter((r) => r.status === 'running').length,
-    completed: rows.filter((r) => r.status === 'completed').length,
-    failed: rows.filter((r) => r.status === 'failed').length,
-    silent: rows.filter((r) => r.status === 'silent').length,
-    killed: rows.filter((r) => r.status === 'killed').length
+    spawned: rows.filter((r) => r['status'] === 'spawned').length,
+    running: rows.filter((r) => r['status'] === 'running').length,
+    completed: rows.filter((r) => r['status'] === 'completed').length,
+    failed: rows.filter((r) => r['status'] === 'failed').length,
+    silent: rows.filter((r) => r['status'] === 'silent').length,
+    killed: rows.filter((r) => r['status'] === 'killed').length,
   };
-
-  res.json({
-    registryPath,
-    summary,
-    rows
-  });
+  res.json({ registryPath, summary, rows });
 });
 
-app.get('/api/foxmemory/overview', async (_req, res) => {
+app.get('/api/foxmemory/overview', async (_req: Request, res: Response) => {
   try {
     const overview = await probeFoxmemory();
     return res.json({ ok: true, ...overview });
-  } catch (error) {
-    return res.status(500).json({ ok: false, error: String(error.message || error) });
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
-app.post('/api/registry/kill', (req, res) => {
+app.post('/api/registry/kill', (req: Request<Record<string, never>, unknown, KillRequestBody>, res: Response) => {
   const { runId, childSessionKey, reason } = req.body || {};
   if (!runId) return res.status(400).json({ ok: false, error: 'runId is required' });
 
@@ -373,17 +466,13 @@ app.post('/api/registry/kill', (req, res) => {
     let immediateKillSucceeded = false;
     let immediateKillNote = '';
 
-    // Best-effort immediate kill path:
-    // 1) Resolve child session key -> sessionId from CLI JSON.
-    // 2) Send a stop/terminate directive into that session.
-    // If any step fails, we fall back to queueing.
     try {
       attemptedImmediateKill = true;
       const sessionsJson = execFileSync('openclaw', ['sessions', '--all-agents', '--json'], {
         cwd: workspaceRoot,
-        encoding: 'utf8'
+        encoding: 'utf8',
       });
-      const parsed = JSON.parse(sessionsJson);
+      const parsed = JSON.parse(sessionsJson) as { sessions?: { key: string; sessionId: string }[] };
       const match = (parsed.sessions || []).find((s) => s.key === childSessionKey);
 
       if (match?.sessionId) {
@@ -395,7 +484,7 @@ app.post('/api/registry/kill', (req, res) => {
             match.sessionId,
             '--message',
             'STOP NOW. Terminate this run immediately and do not continue execution.',
-            '--json'
+            '--json',
           ],
           { cwd: workspaceRoot, encoding: 'utf8' }
         );
@@ -404,11 +493,10 @@ app.post('/api/registry/kill', (req, res) => {
       } else {
         immediateKillNote = 'No matching sessionId found for child_session_key in CLI session list.';
       }
-    } catch (e) {
-      immediateKillNote = `Immediate kill attempt failed: ${String(e.message || e)}`;
+    } catch (e: unknown) {
+      immediateKillNote = `Immediate kill attempt failed: ${e instanceof Error ? e.message : String(e)}`;
     }
 
-    // Always record audit trail in kill queue (success or fallback)
     if (!fs.existsSync(killQueuePath)) {
       fs.writeFileSync(
         killQueuePath,
@@ -428,9 +516,11 @@ app.post('/api/registry/kill', (req, res) => {
       '--status',
       'killed',
       '--outcome',
-      immediateKillSucceeded ? `${killReason} (immediate stop attempted)` : `${killReason} (queued; immediate stop unavailable)`,
+      immediateKillSucceeded
+        ? `${killReason} (immediate stop attempted)`
+        : `${killReason} (queued; immediate stop unavailable)`,
       '--artifacts',
-      'docs/ACP_KILL_QUEUE.md'
+      'docs/ACP_KILL_QUEUE.md',
     ]);
 
     return res.json({
@@ -438,10 +528,10 @@ app.post('/api/registry/kill', (req, res) => {
       queued: !immediateKillSucceeded,
       attemptedImmediateKill,
       immediateKillSucceeded,
-      note: immediateKillNote
+      note: immediateKillNote,
     });
-  } catch (error) {
-    return res.status(500).json({ ok: false, error: String(error.message || error) });
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 

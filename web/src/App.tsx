@@ -30,7 +30,7 @@ import {
   ToggleButton,
   ToggleButtonGroup,
 } from '@mui/material';
-import { alpha, createTheme, ThemeProvider } from '@mui/material/styles';
+import { alpha, createTheme, styled, ThemeProvider } from '@mui/material/styles';
 import { useDispatch, useSelector } from 'react-redux';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
@@ -50,10 +50,12 @@ import {
   useGetFoxmemoryOverviewQuery,
   useKillRegistryRunMutation,
 } from './services/dashboardApi';
+import type { RootState } from './store';
+import type { RegistryRow, Notice, ChartRange } from './types';
 
 const DRAWER_WIDTH = 250;
 
-const STATUS_HELP = {
+const STATUS_HELP: Record<string, string> = {
   spawned: 'Session was created and registered, but no runtime confirmation yet.',
   running: 'Session is actively executing work.',
   silent: 'Run accepted, but no child output has been observed yet.',
@@ -62,7 +64,7 @@ const STATUS_HELP = {
   killed: 'Session was intentionally stopped or kill-requested.',
 };
 
-const STATUS_COLOR = {
+const STATUS_COLOR: Record<string, 'info' | 'primary' | 'warning' | 'success' | 'error' | 'secondary' | 'default'> = {
   spawned: 'info',
   running: 'primary',
   silent: 'warning',
@@ -71,7 +73,100 @@ const STATUS_COLOR = {
   killed: 'secondary',
 };
 
-function StatusBadge({ value }) {
+// ── Styled components ──────────────────────────────────────────────────────────
+
+const AppShell = styled(Box)(({ theme }) => ({
+  display: 'flex',
+  minHeight: '100vh',
+  backgroundColor: theme.palette.background.default,
+}));
+
+const SidebarDrawer = styled(Drawer)(({ theme }) => ({
+  width: DRAWER_WIDTH,
+  flexShrink: 0,
+  '& .MuiDrawer-paper': {
+    width: DRAWER_WIDTH,
+    boxSizing: 'border-box',
+    borderRight: 0,
+    padding: theme.spacing(2),
+  },
+}));
+
+const LogoBar = styled(Box)({
+  height: 44,
+  borderRadius: 24,
+  background: 'linear-gradient(135deg, #5e72e4 0%, #825ee4 100%)',
+  color: 'white',
+  display: 'flex',
+  alignItems: 'center',
+  paddingLeft: 12,
+  paddingRight: 12,
+  marginBottom: 8,
+});
+
+const LogoAvatar = styled(Box)({
+  marginRight: 8,
+  borderRadius: '50%',
+  backgroundColor: '#fff',
+  display: 'grid',
+  placeItems: 'center',
+  padding: '3px',
+  boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+});
+
+const GlassAppBar = styled(AppBar)(({ theme }) => ({
+  backdropFilter: 'blur(8px)',
+  borderBottom: `1px solid ${theme.palette.divider}`,
+  backgroundColor: alpha(theme.palette.background.default, 0.72),
+}));
+
+const StyledStatCard = styled(Card)(({ theme }) => ({
+  border: `1px solid ${theme.palette.divider}`,
+  borderRadius: theme.shape.borderRadius * 3,
+  background:
+    theme.palette.mode === 'dark'
+      ? 'linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0))'
+      : 'linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.65))',
+}));
+
+const StatCardContent = styled(CardContent)({
+  padding: 16,
+  '&:last-child': { paddingBottom: 16 },
+});
+
+const StatCardIconBox = styled(Box, {
+  shouldForwardProp: (prop) => prop !== 'iconColor',
+})<{ iconColor: string }>(({ iconColor }) => ({
+  width: 44,
+  height: 44,
+  borderRadius: 16,
+  display: 'grid',
+  placeItems: 'center',
+  color: 'white',
+  background: iconColor,
+}));
+
+const MonoTableCell = styled(TableCell)({
+  fontFamily: 'monospace',
+  fontSize: 12,
+});
+
+const LogPaper = styled(Paper, {
+  shouldForwardProp: (prop) => prop !== 'maxH',
+})<{ maxH?: number }>(({ theme, maxH = 140 }) => ({
+  padding: theme.spacing(1.5),
+  maxHeight: maxH,
+  overflow: 'auto',
+  backgroundColor: theme.palette.background.default,
+}));
+
+// ── Sub-components ─────────────────────────────────────────────────────────────
+
+interface StatusBadgeProps {
+  value: string | null | undefined;
+}
+
+function StatusBadge({ value }: StatusBadgeProps) {
   const key = (value || 'unknown').toLowerCase();
   return (
     <Tooltip title={STATUS_HELP[key] || 'Unknown status'} arrow>
@@ -80,21 +175,17 @@ function StatusBadge({ value }) {
   );
 }
 
-function StatCard({ title, value, icon, color }) {
+interface StatCardProps {
+  title: string;
+  value: number | string;
+  icon: React.ReactNode;
+  iconColor: string;
+}
+
+function StatCard({ title, value, icon, iconColor }: StatCardProps) {
   return (
-    <Card
-      elevation={0}
-      sx={{
-        border: 1,
-        borderColor: 'divider',
-        borderRadius: 3,
-        background: (theme) =>
-          theme.palette.mode === 'dark'
-            ? 'linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0))'
-            : 'linear-gradient(180deg, rgba(255,255,255,0.9), rgba(255,255,255,0.65))',
-      }}
-    >
-      <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+    <StyledStatCard elevation={0}>
+      <StatCardContent>
         <Box display="flex" alignItems="center" justifyContent="space-between">
           <Box>
             <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
@@ -104,19 +195,21 @@ function StatCard({ title, value, icon, color }) {
               {value}
             </Typography>
           </Box>
-          <Box sx={{ width: 44, height: 44, borderRadius: 2, display: 'grid', placeItems: 'center', color: 'white', background: color }}>
-            {icon}
-          </Box>
+          <StatCardIconBox iconColor={iconColor}>{icon}</StatCardIconBox>
         </Box>
-      </CardContent>
-    </Card>
+      </StatCardContent>
+    </StyledStatCard>
   );
 }
 
+// ── Main component ─────────────────────────────────────────────────────────────
+
+type RtkError = { data?: { error?: string }; error?: string; message?: string } | undefined;
+
 export default function App() {
   const dispatch = useDispatch();
-  const { mode, section, chartRange } = useSelector((s) => s.ui);
-  const [notice, setNotice] = useState(null);
+  const { mode, section, chartRange } = useSelector((s: RootState) => s.ui);
+  const [notice, setNotice] = useState<Notice | null>(null);
 
   const {
     data: registryData,
@@ -161,14 +254,14 @@ export default function App() {
     [mode],
   );
 
-  const grad = (a, b) => `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
+  const grad = (a: string, b: string) => `linear-gradient(135deg, ${a} 0%, ${b} 100%)`;
 
   const onManualRefresh = () => {
     if (section === 'acp') refetchRegistry();
     else refetchFox();
   };
 
-  const onKill = async (row) => {
+  const onKill = async (row: RegistryRow) => {
     const reason = window.prompt('Reason for kill request?', 'Manual kill requested from dashboard');
     if (reason === null) return;
     try {
@@ -180,12 +273,13 @@ export default function App() {
           : `Immediate kill unavailable; queued. ${json.note || ''}`,
       });
     } catch (e) {
-      setNotice({ severity: 'error', text: `Kill request failed: ${String(e?.data?.error || e.message || e)}` });
+      const err = e as RtkError;
+      setNotice({ severity: 'error', text: `Kill request failed: ${String(err?.data?.error || err?.message || e)}` });
     }
   };
 
-  const registry = registryData || { summary: {}, rows: [] };
-  const summary = registry.summary || {};
+  const registry = registryData || { summary: {} as typeof registryData extends undefined ? never : NonNullable<typeof registryData>['summary'], rows: [] };
+  const summary = registryData?.summary;
 
   const chartData = useMemo(() => {
     if (!foxmemory) return [];
@@ -193,7 +287,7 @@ export default function App() {
     if (chartRange === '30d') {
       const all = foxmemory.memoriesByDay || [];
       const map = Object.fromEntries(all.map((d) => [d.day, d.count]));
-      const out = [];
+      const out: { day: string; count: number }[] = [];
       const now = new Date();
       for (let i = 29; i >= 0; i -= 1) {
         const d = new Date(now);
@@ -230,38 +324,28 @@ export default function App() {
     ? new Date(lastRefreshTs).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' })
     : '—';
 
-  const getErrorText = (err) => {
+  const getErrorText = (err: RtkError) => {
     const e = err?.data?.error || err?.error || err?.message;
     if (!e) return 'request failed';
     return String(e).slice(0, 120);
   };
 
   const apiErrorText = section === 'acp'
-    ? (registryIsError ? getErrorText(registryError) : '')
-    : (foxIsError ? getErrorText(foxError) : '');
+    ? (registryIsError ? getErrorText(registryError as RtkError) : '')
+    : (foxIsError ? getErrorText(foxError as RtkError) : '');
 
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
-        <Drawer variant="permanent" sx={{ width: DRAWER_WIDTH, flexShrink: 0, [`& .MuiDrawer-paper`]: { width: DRAWER_WIDTH, boxSizing: 'border-box', borderRight: 0, px: 2, py: 2 } }}>
+      <AppShell>
+        <SidebarDrawer variant="permanent">
           <Box px={1} pb={1.5}>
-            <Box sx={{ height: 44, borderRadius: 2, background: grad('#5e72e4', '#825ee4'), color: 'white', display: 'flex', alignItems: 'center', px: 1.5, mb: 1 }}>
-              <Box
-                sx={{
-                  mr: 1,
-                  borderRadius: '50%',
-                  bgcolor: '#fff',
-                  display: 'grid',
-                  placeItems: 'center',
-                  p: '3px',
-                  boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-                }}
-              >
+            <LogoBar>
+              <LogoAvatar>
                 <Typography component="span" sx={{ fontSize: 14, lineHeight: 1 }}>🦊</Typography>
-              </Box>
+              </LogoAvatar>
               <Typography variant="subtitle2" fontWeight={700}>FoxOps</Typography>
-            </Box>
+            </LogoBar>
           </Box>
           <Divider sx={{ mb: 1.5 }} />
           <List sx={{ gap: 0.7, display: 'grid' }}>
@@ -278,10 +362,10 @@ export default function App() {
               Built with ❤️ by FoxLight Imagineering
             </Typography>
           </Box>
-        </Drawer>
+        </SidebarDrawer>
 
         <Box sx={{ flexGrow: 1 }}>
-          <AppBar position="sticky" color="transparent" elevation={0} sx={{ backdropFilter: 'blur(8px)', borderBottom: 1, borderColor: 'divider', bgcolor: alpha(theme.palette.background.default, 0.72) }}>
+          <GlassAppBar position="sticky" color="transparent" elevation={0}>
             <Toolbar>
               <Box sx={{ flexGrow: 1 }}>
                 <Typography variant="h6" fontWeight={700}>FoxOps</Typography>
@@ -309,7 +393,7 @@ export default function App() {
                 </IconButton>
               </Tooltip>
             </Toolbar>
-          </AppBar>
+          </GlassAppBar>
 
           <Container maxWidth="xl" sx={{ py: 3 }}>
             <Box sx={{ height: 8, mb: 1.25 }}>
@@ -327,23 +411,23 @@ export default function App() {
             {section === 'acp' ? (
               <>
                 <Grid container spacing={1.5} mb={2.5}>
-                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="total" value={summary.total ?? 0} icon={<MemoryRoundedIcon fontSize="small" />} color={grad('#5e72e4', '#825ee4')} /></Grid>
-                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="running" value={summary.running ?? 0} icon={<MemoryRoundedIcon fontSize="small" />} color={grad('#11cdef', '#1171ef')} /></Grid>
-                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="completed" value={summary.completed ?? 0} icon={<CheckCircleRoundedIcon fontSize="small" />} color={grad('#2dce89', '#2dbd5a')} /></Grid>
-                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="failed" value={summary.failed ?? 0} icon={<ErrorRoundedIcon fontSize="small" />} color={grad('#f5365c', '#f56036')} /></Grid>
-                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="silent" value={summary.silent ?? 0} icon={<PauseCircleRoundedIcon fontSize="small" />} color={grad('#fb6340', '#fbb140')} /></Grid>
+                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="total" value={summary?.total ?? 0} icon={<MemoryRoundedIcon fontSize="small" />} iconColor={grad('#5e72e4', '#825ee4')} /></Grid>
+                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="running" value={summary?.running ?? 0} icon={<MemoryRoundedIcon fontSize="small" />} iconColor={grad('#11cdef', '#1171ef')} /></Grid>
+                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="completed" value={summary?.completed ?? 0} icon={<CheckCircleRoundedIcon fontSize="small" />} iconColor={grad('#2dce89', '#2dbd5a')} /></Grid>
+                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="failed" value={summary?.failed ?? 0} icon={<ErrorRoundedIcon fontSize="small" />} iconColor={grad('#f5365c', '#f56036')} /></Grid>
+                  <Grid item xs={12} sm={6} md={3} lg={2}><StatCard title="silent" value={summary?.silent ?? 0} icon={<PauseCircleRoundedIcon fontSize="small" />} iconColor={grad('#fb6340', '#fbb140')} /></Grid>
                 </Grid>
 
                 <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 3, overflow: 'hidden' }}>
                   <Table size="small" stickyHeader>
                     <TableHead><TableRow><TableCell>Created (CT)</TableCell><TableCell>Purpose</TableCell><TableCell>Status</TableCell><TableCell>Run ID</TableCell><TableCell>Child Session</TableCell><TableCell>Done (CT)</TableCell><TableCell>Outcome</TableCell><TableCell align="right">Action</TableCell></TableRow></TableHead>
                     <TableBody>
-                      {(registry.rows || []).map((r, idx) => {
+                      {(registryData?.rows || []).map((r, idx) => {
                         const done = ['completed', 'failed', 'killed'].includes((r.status || '').toLowerCase());
                         return (
                           <TableRow key={`${r.run_id}-${idx}`} hover>
                             <TableCell>{r.created_at_ct}</TableCell><TableCell sx={{ minWidth: 260 }}>{r.purpose}</TableCell><TableCell><StatusBadge value={r.status} /></TableCell>
-                            <TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{r.run_id}</TableCell><TableCell sx={{ fontFamily: 'monospace', fontSize: 12 }}>{r.child_session_key}</TableCell>
+                            <MonoTableCell>{r.run_id}</MonoTableCell><MonoTableCell>{r.child_session_key}</MonoTableCell>
                             <TableCell>{r.done_at_ct}</TableCell><TableCell sx={{ minWidth: 260 }}>{r.outcome_summary}</TableCell>
                             <TableCell align="right"><Tooltip title={done ? 'Already terminal status' : 'Attempt immediate kill, then queue fallback'} arrow><span><IconButton color="error" size="small" disabled={done} onClick={() => onKill(r)}><DeleteForeverIcon fontSize="small" /></IconButton></span></Tooltip></TableCell>
                           </TableRow>
@@ -356,10 +440,10 @@ export default function App() {
             ) : (
               <>
                 <Grid container spacing={1.5} mb={2.5}>
-                  <Grid item xs={12} sm={6} md={3}><StatCard title="memories stored" value={foxmemory?.memoryCount ?? 0} icon={<TimelineRoundedIcon fontSize="small" />} color={grad('#5e72e4', '#825ee4')} /></Grid>
-                  <Grid item xs={12} sm={6} md={3}><StatCard title="ingestion queue" value={foxmemory?.ingestionQueueDepth ?? '—'} icon={<HubRoundedIcon fontSize="small" />} color={grad('#11cdef', '#1171ef')} /></Grid>
-                  <Grid item xs={12} sm={6} md={3}><StatCard title="retrieval quality" value={foxmemory?.retrievalQuality?.value ?? '—'} icon={<CheckCircleRoundedIcon fontSize="small" />} color={grad('#2dce89', '#2dbd5a')} /></Grid>
-                  <Grid item xs={12} sm={6} md={3}><StatCard title="api health" value={foxmemory?.api?.ok ? 'healthy' : 'degraded'} icon={<MemoryRoundedIcon fontSize="small" />} color={foxmemory?.api?.ok ? grad('#2dce89', '#2dbd5a') : grad('#f5365c', '#f56036')} /></Grid>
+                  <Grid item xs={12} sm={6} md={3}><StatCard title="memories stored" value={foxmemory?.memoryCount ?? 0} icon={<TimelineRoundedIcon fontSize="small" />} iconColor={grad('#5e72e4', '#825ee4')} /></Grid>
+                  <Grid item xs={12} sm={6} md={3}><StatCard title="ingestion queue" value={foxmemory?.ingestionQueueDepth ?? '—'} icon={<HubRoundedIcon fontSize="small" />} iconColor={grad('#11cdef', '#1171ef')} /></Grid>
+                  <Grid item xs={12} sm={6} md={3}><StatCard title="retrieval quality" value={foxmemory?.retrievalQuality?.value ?? '—'} icon={<CheckCircleRoundedIcon fontSize="small" />} iconColor={grad('#2dce89', '#2dbd5a')} /></Grid>
+                  <Grid item xs={12} sm={6} md={3}><StatCard title="api health" value={foxmemory?.api?.ok ? 'healthy' : 'degraded'} icon={<MemoryRoundedIcon fontSize="small" />} iconColor={foxmemory?.api?.ok ? grad('#2dce89', '#2dbd5a') : grad('#f5365c', '#f56036')} /></Grid>
                 </Grid>
 
                 <Card elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 3, mb: 1.5 }}>
@@ -383,7 +467,7 @@ export default function App() {
                       <CardContent sx={{ p: 3 }}>
                         <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
                           <Typography variant="h6" fontWeight={700}>Memories stored by day</Typography>
-                          <ToggleButtonGroup exclusive size="small" value={chartRange} onChange={(_, v) => v && dispatch(setChartRange(v))}>
+                          <ToggleButtonGroup exclusive size="small" value={chartRange} onChange={(_, v: ChartRange | null) => v && dispatch(setChartRange(v))}>
                             <ToggleButton value="7d">7d</ToggleButton>
                             <ToggleButton value="30d">30d</ToggleButton>
                             <ToggleButton value="all">All</ToggleButton>
@@ -444,9 +528,11 @@ export default function App() {
                         </Grid>
 
                         <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Recent memory-related error lines ({foxmemory?.recentErrors?.count ?? 0})</Typography>
-                        <Paper variant="outlined" sx={{ p: 1.5, maxHeight: 140, overflow: 'auto', bgcolor: 'background.default' }}>
-                          {(foxmemory?.recentErrors?.samples || []).length ? (foxmemory.recentErrors.samples.map((line, i) => <Typography key={i} variant="caption" display="block" sx={{ fontFamily: 'monospace', mb: 0.75 }}>{line}</Typography>)) : <Typography variant="body2" color="text.secondary">No recent error samples found.</Typography>}
-                        </Paper>
+                        <LogPaper variant="outlined" maxH={140}>
+                          {(foxmemory?.recentErrors?.samples || []).length
+                            ? (foxmemory!.recentErrors.samples.map((line, i) => <Typography key={i} variant="caption" display="block" sx={{ fontFamily: 'monospace', mb: 0.75 }}>{line}</Typography>))
+                            : <Typography variant="body2" color="text.secondary">No recent error samples found.</Typography>}
+                        </LogPaper>
 
                         <Typography variant="subtitle2" fontWeight={700} sx={{ mt: 1.5, mb: 1 }}>
                           Plugin logs ({foxmemory?.pluginLogs?.count ?? 0})
@@ -454,9 +540,9 @@ export default function App() {
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
                           Source: {foxmemory?.pluginLogs?.file || '—'} · showing last {(foxmemory?.pluginLogs?.lines || []).length} lines
                         </Typography>
-                        <Paper variant="outlined" sx={{ p: 1.5, maxHeight: 220, overflow: 'auto', bgcolor: 'background.default' }}>
+                        <LogPaper variant="outlined" maxH={220}>
                           {(foxmemory?.pluginLogs?.lines || []).length ? (
-                            foxmemory.pluginLogs.lines.map((line, i) => (
+                            foxmemory!.pluginLogs.lines.map((line, i) => (
                               <Typography key={i} variant="caption" display="block" sx={{ fontFamily: 'monospace', mb: 0.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                                 {line}
                               </Typography>
@@ -464,7 +550,7 @@ export default function App() {
                           ) : (
                             <Typography variant="body2" color="text.secondary">No plugin log lines found yet.</Typography>
                           )}
-                        </Paper>
+                        </LogPaper>
                       </CardContent>
                     </Card>
                   </Grid>
@@ -473,7 +559,7 @@ export default function App() {
             )}
           </Container>
         </Box>
-      </Box>
+      </AppShell>
     </ThemeProvider>
   );
 }
