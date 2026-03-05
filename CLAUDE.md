@@ -9,8 +9,27 @@
 - TypeScript everywhere — no `.js` or `.jsx` files
 - Use `styled` from `@mui/material/styles` for custom components; avoid inline `sx` props for anything beyond one-liner spacing
 - Keep MUI component imports; wrap them with `styled()` rather than replacing them
-- All shared types live in `web/src/types.ts`
+- All shared types live in `web/src/types.ts`; component-local types in `ComponentName/ComponentName.types.ts`
 - Export `RootState` and `AppDispatch` from `web/src/store.ts`
+
+## Component architecture
+- All components live under `web/src/components/<ComponentName>/`
+- Every component folder contains exactly:
+  - `ComponentName.tsx` — the component
+  - `ComponentName.types.ts` — props and local types (imported by the component, not re-exported from types.ts unless shared)
+  - `ComponentName.spec.tsx` — tests (Vitest + React Testing Library)
+  - `ComponentName.stories.tsx` — Storybook stories
+- Shared styled primitives used by multiple components go in `web/src/components/shared/`
+- `App.tsx` is a thin orchestrator only — no business logic, no inline styled components
+
+## Testing
+- Test runner: Vitest
+- Component tests: React Testing Library
+- File naming: `*.spec.tsx` for component tests
+
+## Storybook
+- Builder: `@storybook/react-vite`
+- Stories file naming: `*.stories.tsx`
 
 ## How to run
 ```bash
@@ -40,5 +59,4 @@ yarn build:web
 - Don't add client-side routing — this is a single-page operational dashboard
 - Don't change the markdown-as-database pattern for the registry/kill queue
 - Don't replace MUI components — extend them with `styled()`
-- Don't add test infrastructure unless explicitly asked
 - Never auto-commit — always wait for explicit instruction to commit or push

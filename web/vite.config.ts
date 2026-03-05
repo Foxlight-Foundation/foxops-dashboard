@@ -7,11 +7,11 @@ export default defineConfig({
   server: {
     port: 5177,
     proxy: {
-      '/api': 'http://localhost:8787'
-    }
+      '/api': 'http://localhost:8787',
+    },
   },
   build: {
     outDir: '../dist',
-    emptyOutDir: true
-  }
+    emptyOutDir: true,
+  },
 });
