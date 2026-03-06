@@ -1,33 +1,45 @@
-import { useMemo } from 'react';
-import { Box, Card, CardContent, Grid, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
-import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import { useMemo, useState } from 'react';
+import { Box, Card, CardContent, Chip, Grid, Tab, Tabs, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import MemoryRoundedIcon from '@mui/icons-material/MemoryRounded';
 import TimelineRoundedIcon from '@mui/icons-material/TimelineRounded';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip as ReTooltip, XAxis, YAxis } from 'recharts';
 import StatCard from '../StatCard/StatCard';
+import FoxMemoryAgentsView from '../FoxMemoryAgentsView/FoxMemoryAgentsView';
 import { LogPaper, grad } from '../shared/styled';
+import {
+  useGetFoxmemoryPromptsQuery,
+  useSetFoxmemoryExtractionPromptMutation,
+  useSetFoxmemoryUpdatePromptMutation,
+} from '../../services/dashboardApi';
 import type { FoxMemorySectionProps } from './FoxMemorySection.types';
 import type { ChartRange } from '../../types';
 
+type SubView = 'performance' | 'agents';
+
+const EVENT_COLORS: Record<string, string> = { ADD: '#2dce89', UPDATE: '#5e72e4', DELETE: '#f5365c', NONE: '#adb5bd' };
+
 const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemorySectionProps) => {
+  const [subView, setSubView] = useState<SubView>('performance');
+
+  const { data: prompts, isFetching: promptsLoading } = useGetFoxmemoryPromptsQuery(undefined, {
+    skip: subView !== 'agents',
+  });
+  const [saveExtractionPrompt] = useSetFoxmemoryExtractionPromptMutation();
+  const [saveUpdatePrompt] = useSetFoxmemoryUpdatePromptMutation();
+
+  const onSaveExtractionPrompt = async (prompt: string | null) => { await saveExtractionPrompt({ prompt }).unwrap(); };
+  const onSaveUpdatePrompt = async (prompt: string | null) => { await saveUpdatePrompt({ prompt }).unwrap(); };
+
   const chartData = useMemo(() => {
     if (!foxmemory) return [];
-    if (chartRange === 'all') return foxmemory.memoriesByDay || [];
-    if (chartRange === '30d') {
-      const all = foxmemory.memoriesByDay || [];
-      const map = Object.fromEntries(all.map((d) => [d.day, d.count]));
-      const out: { day: string; count: number }[] = [];
-      const now = new Date();
-      for (let i = 29; i >= 0; i -= 1) {
-        const d = new Date(now);
-        d.setUTCDate(d.getUTCDate() - i);
-        const day = d.toISOString().slice(0, 10);
-        out.push({ day, count: map[day] || 0 });
-      }
-      return out;
-    }
-    return foxmemory.memoriesByDay7d || [];
+    const all = foxmemory.memoriesByDay || [];
+    if (chartRange === 'all') return all;
+    const days = chartRange === '30d' ? 30 : 7;
+    const cutoff = new Date();
+    cutoff.setUTCDate(cutoff.getUTCDate() - (days - 1));
+    cutoff.setUTCHours(0, 0, 0, 0);
+    return all.filter((d) => new Date(d.date) >= cutoff);
   }, [foxmemory, chartRange]);
 
   const modeData = useMemo(() => [
@@ -35,27 +47,34 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
     { name: 'raw', value: Number(foxmemory?.stats?.writesByMode?.raw ?? 0) },
   ], [foxmemory]);
 
-  const eventData = useMemo(() => {
-    const e = foxmemory?.stats?.memoryEvents || {};
-    return [
-      { event: 'ADD', count: Number(e.ADD ?? 0) },
-      { event: 'UPDATE', count: Number(e.UPDATE ?? 0) },
-      { event: 'DELETE', count: Number(e.DELETE ?? 0) },
-      { event: 'NONE', count: Number(e.NONE ?? 0) },
-    ];
-  }, [foxmemory]);
-
   return (
     <>
+      <Tabs value={subView} onChange={(_, v: SubView) => setSubView(v)} sx={{ mb: 2.5, borderBottom: 1, borderColor: 'divider' }}>
+        <Tab label="Performance" value="performance" />
+        <Tab label="Agents" value="agents" />
+      </Tabs>
+
+      {subView === 'agents' ? (
+        <FoxMemoryAgentsView
+          foxmemory={foxmemory}
+          prompts={prompts}
+          promptsLoading={promptsLoading}
+          onSaveExtractionPrompt={onSaveExtractionPrompt}
+          onSaveUpdatePrompt={onSaveUpdatePrompt}
+        />
+      ) : (
+      <>
       <Grid container spacing={1.5} mb={2.5}>
         <Grid item xs={12} sm={6} md={3}>
-          <StatCard title="memories stored" value={foxmemory?.memoryCount ?? 0} icon={<TimelineRoundedIcon fontSize="small" />} iconColor={grad('#5e72e4', '#825ee4')} />
+          <StatCard title="Total Memories Stored" value={foxmemory?.memorySummary?.total ?? foxmemory?.memoryCount ?? 0} icon={<TimelineRoundedIcon fontSize="small" />} iconColor={grad('#5e72e4', '#825ee4')} />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
-          <StatCard title="ingestion queue" value={foxmemory?.ingestionQueueDepth ?? '—'} icon={<HubRoundedIcon fontSize="small" />} iconColor={grad('#11cdef', '#1171ef')} />
-        </Grid>
-        <Grid item xs={12} sm={6} md={3}>
-          <StatCard title="retrieval quality" value={foxmemory?.retrievalQuality?.value ?? '—'} icon={<CheckCircleRoundedIcon fontSize="small" />} iconColor={grad('#2dce89', '#2dbd5a')} />
+          <StatCard
+            title="searches (30d)"
+            value={foxmemory?.searches?.total ?? '—'}
+            icon={<HubRoundedIcon fontSize="small" />}
+            iconColor={grad('#11cdef', '#1171ef')}
+          />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
@@ -67,44 +86,38 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
         </Grid>
       </Grid>
 
-      <Card elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mb: 1.5 }}>
-        <CardContent sx={{ p: 2 }}>
-          <Typography variant="subtitle2" fontWeight={700}>Auto-capture health</Typography>
-          <Typography variant="body2" color="text.secondary">
-            Last capture: {foxmemory?.autoCapture?.lastAutoCaptureAt || '—'} · successes in last {foxmemory?.autoCapture?.captureWindowMinutes ?? 60}m: {foxmemory?.autoCapture?.captureSuccessCountWindow ?? 0}
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-            Plugin telemetry ({foxmemory?.pluginTelemetry?.windowMinutes ?? 60}m): attempts {foxmemory?.pluginTelemetry?.captureAttempts ?? 0} · success {foxmemory?.pluginTelemetry?.captureSuccess ?? 0} · failed {foxmemory?.pluginTelemetry?.captureFailed ?? 0} · recallFailed {foxmemory?.pluginTelemetry?.recallFailed ?? 0}
-          </Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
-            mode infer/raw: {foxmemory?.pluginTelemetry?.modeInfer ?? 0}/{foxmemory?.pluginTelemetry?.modeRaw ?? 0} · endpoint: {foxmemory?.pluginTelemetry?.lastEndpoint || '—'}
-          </Typography>
-        </CardContent>
-      </Card>
-
       <Grid container spacing={1.5}>
         <Grid item xs={12} lg={7}>
           <Card elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, height: '100%' }}>
             <CardContent sx={{ p: 3 }}>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-                <Typography variant="h6" fontWeight={700}>Memories stored by day</Typography>
+                <Typography variant="h6" fontWeight={700}>Memory events by day</Typography>
                 <ToggleButtonGroup exclusive size="small" value={chartRange} onChange={(_, v: ChartRange | null) => v && onChartRangeChange(v)}>
                   <ToggleButton value="7d">7d</ToggleButton>
                   <ToggleButton value="30d">30d</ToggleButton>
                   <ToggleButton value="all">All</ToggleButton>
                 </ToggleButtonGroup>
               </Box>
-              <Box sx={{ height: 280 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 8, right: 8, left: -18, bottom: 8 }}>
-                    <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.25} />
-                    <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                    <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                    <ReTooltip />
-                    <Bar dataKey="count" fill="#5e72e4" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </Box>
+              <Grid container spacing={1}>
+                {(['ADD', 'UPDATE', 'DELETE'] as const).map((event) => (
+                  <Grid item xs={12} key={event}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600, color: EVENT_COLORS[event] }}>
+                      {event}
+                    </Typography>
+                    <Box sx={{ height: 72 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData} margin={{ top: 2, right: 8, left: -18, bottom: 2 }}>
+                          <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+                          <XAxis dataKey="date" tick={{ fontSize: 10 }} />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={28} />
+                          <ReTooltip />
+                          <Bar dataKey={event} fill={EVENT_COLORS[event]} radius={[3, 3, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </Box>
+                  </Grid>
+                ))}
+              </Grid>
             </CardContent>
           </Card>
         </Grid>
@@ -113,11 +126,12 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
             <CardContent sx={{ p: 3 }}>
               <Typography variant="h6" fontWeight={700} gutterBottom>FoxMemory details</Typography>
               <Typography color="text.secondary">Base URL: {foxmemory?.baseUrl || '—'}</Typography>
-              <Typography color="text.secondary">User ID: {foxmemory?.userId || '—'}</Typography>
-              <Typography color="text.secondary">Health probe: {foxmemory?.api?.endpoint || '—'} · status {foxmemory?.api?.status ?? '—'}</Typography>
-              <Typography color="text.secondary" sx={{ mb: 1 }}>
-                Writes (infer/raw): {foxmemory?.stats?.writesByMode?.infer ?? 0}/{foxmemory?.stats?.writesByMode?.raw ?? 0} · Events ADD/UPDATE/DELETE: {foxmemory?.stats?.memoryEvents?.ADD ?? 0}/{foxmemory?.stats?.memoryEvents?.UPDATE ?? 0}/{foxmemory?.stats?.memoryEvents?.DELETE ?? 0}
-              </Typography>
+              {foxmemory?.searches && (
+                <Typography color="text.secondary" sx={{ mb: 1 }}>
+                  Searches: {foxmemory.searches.total} · avg results {foxmemory.searches.avgResults ?? '—'} · avg score {foxmemory.searches.avgTopScore?.toFixed(3) ?? '—'}
+                </Typography>
+              )}
+
               <Grid container spacing={1} sx={{ mb: 1.25 }}>
                 <Grid item xs={6}>
                   <Typography variant="caption" color="text.secondary">Write mode mix</Typography>
@@ -134,16 +148,23 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
                   </Box>
                 </Grid>
                 <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Memory event mix</Typography>
-                  <Box sx={{ height: 120 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={eventData} margin={{ top: 8, right: 0, left: -18, bottom: 0 }}>
-                        <XAxis dataKey="event" tick={{ fontSize: 10 }} />
-                        <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
-                        <ReTooltip />
-                        <Bar dataKey="count" fill="#2dce89" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                  <Typography variant="caption" color="text.secondary">Recent activity</Typography>
+                  <Box sx={{ mt: 0.5 }}>
+                    {(foxmemory?.recentActivity || []).slice(0, 4).map((entry, i) => (
+                      <Box key={i} sx={{ mb: 0.5 }}>
+                        <Chip
+                          size="small"
+                          label={entry.event}
+                          sx={{ mr: 0.5, fontSize: 10, height: 18, bgcolor: EVENT_COLORS[entry.event] || '#adb5bd', color: '#fff' }}
+                        />
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
+                          {entry.preview ? entry.preview.slice(0, 40) : entry.memoryId.slice(0, 8)}
+                        </Typography>
+                      </Box>
+                    ))}
+                    {!(foxmemory?.recentActivity || []).length && (
+                      <Typography variant="caption" color="text.secondary">No recent activity.</Typography>
+                    )}
                   </Box>
                 </Grid>
               </Grid>
@@ -178,6 +199,8 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
           </Card>
         </Grid>
       </Grid>
+      </>
+      )}
     </>
   );
 };

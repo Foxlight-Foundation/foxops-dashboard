@@ -34,15 +34,67 @@ export interface FoxmemoryStats {
   queue_depth?: number;
 }
 
+export interface MemoryDayEntry {
+  date: string;
+  ADD: number;
+  UPDATE: number;
+  DELETE: number;
+  NONE: number;
+  avgLatencyMs?: number;
+}
+
+export interface MemoryActivityEntry {
+  ts: string;
+  event: string;
+  memoryId: string;
+  userId?: string;
+  runId?: string;
+  preview?: string;
+  latencyMs?: number;
+  inferMode?: boolean;
+}
+
+export interface MemorySummary {
+  total: number;
+  byEvent: { ADD: number; UPDATE: number; DELETE: number; NONE: number };
+  noneRatePct?: number;
+  writeLatency?: { avgMs: number; minMs: number; maxMs: number };
+  model?: { llm: string; embed: string };
+}
+
+export interface MemorySearchStats {
+  total: number;
+  avgResults?: number;
+  avgTopScore?: number;
+  avgLatencyMs?: number;
+}
+
+export interface FoxmemoryPromptConfig {
+  prompt: string | null;
+  effective_prompt: string | null;
+  source: string;
+  persisted: boolean;
+}
+
+export interface FoxmemoryPromptsResponse {
+  ok: boolean;
+  extractionPrompt: FoxmemoryPromptConfig;
+  updatePrompt: FoxmemoryPromptConfig;
+}
+
 export interface FoxmemoryResponse {
   ok: boolean;
   baseUrl: string;
   userId: string;
   api: { ok: boolean; status: number | null; endpoint: string | null };
+  llmModel: string | null;
+  embedModel: string | null;
   ingestionQueueDepth: number | null;
   memoryCount: number;
-  memoriesByDay: { day: string; count: number }[];
-  memoriesByDay7d: { day: string; count: number }[];
+  memoriesByDay: MemoryDayEntry[];
+  memorySummary: MemorySummary | null;
+  recentActivity: MemoryActivityEntry[];
+  searches: MemorySearchStats | null;
   retrievalQuality: { value: string; source: string };
   recentErrors: { count: number; samples: string[] };
   autoCapture: {

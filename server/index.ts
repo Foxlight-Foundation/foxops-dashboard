@@ -11,9 +11,6 @@ const workspaceRoot = process.env.WORKSPACE_ROOT || path.resolve(__dirname, '..'
 const killQueuePath = path.join(workspaceRoot, 'docs', 'ACP_KILL_QUEUE.md');
 const foxmemoryBaseUrl = process.env.FOXMEMORY_BASE_URL || 'http://192.168.0.118:8082';
 const foxmemoryUserId = process.env.FOXMEMORY_USER_ID || 'thomastupper92618@gmail.com';
-const mem0ApiBaseUrl = process.env.MEM0_API_BASE_URL || 'https://api.mem0.ai';
-const mem0ApiKey = process.env.MEM0_API_KEY || '';
-const qdrantCollection = process.env.QDRANT_COLLECTION || 'foxmemory';
 const gatewayErrLogPath = path.join(process.env.HOME || '', '.openclaw', 'logs', 'gateway.err.log');
 const pluginLogMatch = /foxmemory-openclaw-memory|foxmemory-plugin-v2/i;
 const gatewayLogPath = path.join(process.env.HOME || '', '.openclaw', 'logs', 'gateway.log');
@@ -78,39 +75,64 @@ interface PluginLogs {
   lines: string[];
 }
 
-interface DaySeries {
-  day: string;
-  count: number;
-}
-
 interface ApiResult {
   ok: boolean;
   status: number | null;
   endpoint: string | null;
 }
 
-interface MemoryItem {
-  createdAt?: string;
-  [key: string]: unknown;
-}
-
 interface FoxmemoryStats {
   writesByMode?: { infer?: number; raw?: number };
   memoryEvents?: { ADD?: number; UPDATE?: number; DELETE?: number; NONE?: number };
-  ingestionQueueDepth?: number;
-  ingestion_queue_depth?: number;
-  queueDepth?: number;
-  queue_depth?: number;
+}
+
+interface MemoryDayEntry {
+  date: string;
+  ADD: number;
+  UPDATE: number;
+  DELETE: number;
+  NONE: number;
+  avgLatencyMs?: number;
+}
+
+interface MemoryActivityEntry {
+  ts: string;
+  event: string;
+  memoryId: string;
+  userId?: string;
+  runId?: string;
+  preview?: string;
+  latencyMs?: number;
+  inferMode?: boolean;
+}
+
+interface MemorySummary {
+  total: number;
+  byEvent: { ADD: number; UPDATE: number; DELETE: number; NONE: number };
+  noneRatePct?: number;
+  writeLatency?: { avgMs: number; minMs: number; maxMs: number };
+  model?: { llm: string; embed: string };
+}
+
+interface MemorySearchStats {
+  total: number;
+  avgResults?: number;
+  avgTopScore?: number;
+  avgLatencyMs?: number;
 }
 
 interface FoxmemoryOverview {
   baseUrl: string;
   userId: string;
   api: ApiResult;
+  llmModel: string | null;
+  embedModel: string | null;
   ingestionQueueDepth: number | null;
   memoryCount: number;
-  memoriesByDay: DaySeries[];
-  memoriesByDay7d: DaySeries[];
+  memoriesByDay: MemoryDayEntry[];
+  memorySummary: MemorySummary | null;
+  recentActivity: MemoryActivityEntry[];
+  searches: MemorySearchStats | null;
   retrievalQuality: RetrievalQuality;
   recentErrors: ErrorSamples;
   autoCapture: AutoCaptureHealth;
@@ -309,149 +331,73 @@ const loadPluginLogTail = (limit = 120): PluginLogs => {
   };
 }
 
-const buildLastNDaysSeries = (series: DaySeries[], days = 7): DaySeries[] => {
-  const map = Object.fromEntries((series || []).map((d) => [d.day, d.count]));
-  const out: DaySeries[] = [];
-  const now = new Date();
-  for (let i = days - 1; i >= 0; i -= 1) {
-    const d = new Date(now);
-    d.setUTCDate(d.getUTCDate() - i);
-    const day = d.toISOString().slice(0, 10);
-    out.push({ day, count: map[day] || 0 });
-  }
-  return out;
-}
-
-
-const deriveQdrantBaseUrl = (): string | null => {
-  if (process.env.QDRANT_BASE_URL) return process.env.QDRANT_BASE_URL;
-  try {
-    const u = new URL(foxmemoryBaseUrl);
-    return `${u.protocol}//${u.hostname}:6333`;
-  } catch {
-    return null;
-  }
-};
-
-const fetchQdrantTotalCount = async (): Promise<number | null> => {
-  const base = deriveQdrantBaseUrl();
-  if (!base) return null;
-  try {
-    const res = await fetch(`${base}/collections/${qdrantCollection}/points/count`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ exact: true }),
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { result?: { count?: number } };
-    return Number(json?.result?.count ?? 0);
-  } catch {
-    return null;
-  }
-};
-
-const fetchMem0TodayEventCounts = async (userId: string): Promise<{ ADD: number; UPDATE: number; DELETE: number } | null> => {
-  if (!mem0ApiKey) return null;
-  const tzOffsetMs = new Date().getTimezoneOffset() * 60 * 1000;
-  const localNow = new Date(Date.now() - tzOffsetMs);
-  const day = localNow.toISOString().slice(0, 10);
-  const from = `${day}T00:00:00`;
-  const to = `${day}T23:59:59`;
-
-  const urls = [
-    `${mem0ApiBaseUrl}/v1/events?user_id=${encodeURIComponent(userId)}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=500`,
-    `${mem0ApiBaseUrl}/v1/events?user_id=${encodeURIComponent(userId)}&limit=500`,
-  ];
-
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${mem0ApiKey}`,
-          'x-api-key': mem0ApiKey,
-        },
-      });
-      if (!res.ok) continue;
-      const json = (await res.json()) as { results?: Array<Record<string, unknown>>; data?: Array<Record<string, unknown>> };
-      const rows = Array.isArray(json?.results) ? json.results : Array.isArray(json?.data) ? json.data : [];
-      if (!rows.length) return { ADD: 0, UPDATE: 0, DELETE: 0 };
-
-      const counts = { ADD: 0, UPDATE: 0, DELETE: 0 };
-      for (const row of rows) {
-        const t = String((row.event_type ?? row.eventType ?? '')).toUpperCase();
-        if (t === 'ADD') counts.ADD += 1;
-        else if (t === 'UPDATE') counts.UPDATE += 1;
-        else if (t === 'DELETE') counts.DELETE += 1;
-      }
-      return counts;
-    } catch {
-      // try fallback URL
-    }
-  }
-
-  return null;
-};
-
 const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
-  const endpoints = ['/health', '/v1/health', '/'];
+  // Health probe via v2
   let api: ApiResult = { ok: false, status: null, endpoint: null };
-
-  for (const ep of endpoints) {
+  let llmModel: string | null = null;
+  let embedModel: string | null = null;
+  try {
+    const res = await fetch(`${foxmemoryBaseUrl}/v2/health`, { method: 'GET' });
+    api = { ok: res.ok, status: res.status, endpoint: '/v2/health' };
+    if (res.ok) {
+      const json = (await res.json()) as { data?: { llmModel?: string; embedModel?: string } };
+      llmModel = json?.data?.llmModel ?? null;
+      embedModel = json?.data?.embedModel ?? null;
+    }
+  } catch {
+    // fallback to /health
     try {
-      const res = await fetch(`${foxmemoryBaseUrl}${ep}`, { method: 'GET' });
-      api = { ok: res.ok, status: res.status, endpoint: ep };
-      if (res.ok) break;
+      const res = await fetch(`${foxmemoryBaseUrl}/health`, { method: 'GET' });
+      api = { ok: res.ok, status: res.status, endpoint: '/health' };
     } catch {
-      // continue next endpoint
+      // service unreachable
     }
   }
 
-  let queueDepth: number | null = null;
+  // Runtime stats (/v2/stats) for writesByMode + memoryEvents counters
   let foxmemoryStats: FoxmemoryStats | null = null;
   try {
-    const statsEndpoints = ['/stats', '/v2/stats'];
-    for (const ep of statsEndpoints) {
-      const statsRes = await fetch(`${foxmemoryBaseUrl}${ep}`, { method: 'GET' });
-      if (!statsRes.ok) continue;
-      const stats = (await statsRes.json()) as FoxmemoryStats;
-      foxmemoryStats = stats;
-      queueDepth =
-        stats?.ingestionQueueDepth ??
-        stats?.ingestion_queue_depth ??
-        stats?.queueDepth ??
-        stats?.queue_depth ??
-        null;
-      break;
+    const statsRes = await fetch(`${foxmemoryBaseUrl}/v2/stats`, { method: 'GET' });
+    if (statsRes.ok) {
+      const json = (await statsRes.json()) as { ok?: boolean; data?: { writesByMode?: FoxmemoryStats['writesByMode']; memoryEvents?: FoxmemoryStats['memoryEvents'] } } & FoxmemoryStats;
+      const data = json?.data ?? json;
+      foxmemoryStats = {
+        writesByMode: data?.writesByMode,
+        memoryEvents: data?.memoryEvents,
+      };
     }
   } catch {
-    // optional probe
+    // optional
   }
 
-  let memories: MemoryItem[] = [];
+  // Analytics from /v2/stats/memories?days=30
+  let memoriesByDay: MemoryDayEntry[] = [];
+  let memorySummary: MemorySummary | null = null;
+  let recentActivity: MemoryActivityEntry[] = [];
+  let searches: MemorySearchStats | null = null;
+  let memoryCount = 0;
   try {
-    const u = new URL(`${foxmemoryBaseUrl}/v1/memories`);
-    u.searchParams.set('user_id', foxmemoryUserId);
-    const memRes = await fetch(u.toString(), { method: 'GET' });
-    if (memRes.ok) {
-      const payload = (await memRes.json()) as any;
-      memories = Array.isArray(payload) ? payload : (payload?.results || payload?.data || []);
+    const memStatsRes = await fetch(`${foxmemoryBaseUrl}/v2/stats/memories?days=30`, { method: 'GET' });
+    if (memStatsRes.ok) {
+      const json = (await memStatsRes.json()) as {
+        ok?: boolean;
+        data?: {
+          summary?: MemorySummary;
+          byDay?: MemoryDayEntry[];
+          recentActivity?: MemoryActivityEntry[];
+          searches?: MemorySearchStats;
+        };
+      };
+      const data = json?.data;
+      memorySummary = data?.summary ?? null;
+      memoriesByDay = data?.byDay ?? [];
+      recentActivity = data?.recentActivity ?? [];
+      searches = data?.searches ?? null;
+      memoryCount = data?.summary?.total ?? 0;
     }
   } catch {
-    // optional probe
+    // optional
   }
-
-  const byDay = memories.reduce<Record<string, number>>((acc, m) => {
-    const d = m?.createdAt ? new Date(m.createdAt) : null;
-    if (!d || Number.isNaN(d.getTime())) return acc;
-    const day = d.toISOString().slice(0, 10);
-    acc[day] = (acc[day] || 0) + 1;
-    return acc;
-  }, {});
-
-  const dailySeries: DaySeries[] = Object.entries(byDay)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([day, count]) => ({ day, count }));
 
   const retrieval = loadLatestRetrievalQuality();
   const errors = countRecentFoxmemoryErrors();
@@ -459,40 +405,24 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
   const pluginTelemetry = loadPluginTelemetry(60);
   const pluginLogs = loadPluginLogTail(120);
 
-  const qdrantTotal = await fetchQdrantTotalCount();
-  const memoryCount = qdrantTotal ?? memories.length;
-
-  const eventCounts = await fetchMem0TodayEventCounts(foxmemoryUserId);
-  const statsMerged: FoxmemoryStats | null = foxmemoryStats
-    ? {
-        ...foxmemoryStats,
-        memoryEvents: eventCounts
-          ? {
-              ...foxmemoryStats.memoryEvents,
-              ADD: eventCounts.ADD,
-              UPDATE: eventCounts.UPDATE,
-              DELETE: eventCounts.DELETE,
-            }
-          : foxmemoryStats.memoryEvents,
-      }
-    : eventCounts
-      ? { memoryEvents: { ...eventCounts, NONE: 0 } }
-      : null;
-
   return {
     baseUrl: foxmemoryBaseUrl,
     userId: foxmemoryUserId,
     api,
-    ingestionQueueDepth: queueDepth,
+    llmModel,
+    embedModel,
+    ingestionQueueDepth: null,
     memoryCount,
-    memoriesByDay: dailySeries,
-    memoriesByDay7d: buildLastNDaysSeries(dailySeries, 7),
+    memoriesByDay,
+    memorySummary,
+    recentActivity,
+    searches,
     retrievalQuality: retrieval,
     recentErrors: errors,
     autoCapture,
     pluginTelemetry,
     pluginLogs,
-    stats: statsMerged,
+    stats: foxmemoryStats,
   };
 }
 
@@ -543,6 +473,50 @@ app.get('/api/crons', (_req: Request, res: Response) => {
     res.json({ ok: true, jobs: parsed.jobs || [], total: parsed.total ?? (parsed.jobs || []).length });
   } catch (e: unknown) {
     res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e), jobs: [] });
+  }
+});
+
+app.get('/api/foxmemory/prompts', async (_req: Request, res: Response) => {
+  try {
+    const [p1, p2] = await Promise.all([
+      fetch(`${foxmemoryBaseUrl}/v2/config/prompt`).then((r) => r.json()),
+      fetch(`${foxmemoryBaseUrl}/v2/config/update-prompt`).then((r) => r.json()),
+    ]) as [{ data?: { prompt: string | null; source: string; persisted: boolean } }, { data?: { prompt: string | null; source: string; persisted: boolean } }];
+    return res.json({
+      ok: true,
+      extractionPrompt: p1?.data ?? { prompt: null, source: 'unknown', persisted: false },
+      updatePrompt: p2?.data ?? { prompt: null, source: 'unknown', persisted: false },
+    });
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.put('/api/foxmemory/config/prompt', async (req: Request<Record<string, never>, unknown, { prompt: string | null }>, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/prompt`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: req.body.prompt ?? null }),
+    });
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.put('/api/foxmemory/config/update-prompt', async (req: Request<Record<string, never>, unknown, { prompt: string | null }>, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/update-prompt`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: req.body.prompt ?? null }),
+    });
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
