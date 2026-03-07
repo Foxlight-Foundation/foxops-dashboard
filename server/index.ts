@@ -11,6 +11,14 @@ const workspaceRoot = process.env.WORKSPACE_ROOT || path.resolve(__dirname, '..'
 const killQueuePath = path.join(workspaceRoot, 'docs', 'ACP_KILL_QUEUE.md');
 const foxmemoryBaseUrl = process.env.FOXMEMORY_BASE_URL || 'http://192.168.0.118:8082';
 const foxmemoryUserId = process.env.FOXMEMORY_USER_ID || 'thomastupper92618@gmail.com';
+const qdrantBaseUrl = process.env.QDRANT_BASE_URL || (() => {
+  try {
+    const u = new URL(foxmemoryBaseUrl);
+    return `${u.protocol}//${u.hostname}:6333`;
+  } catch {
+    return 'http://127.0.0.1:6333';
+  }
+})();
 const gatewayErrLogPath = path.join(process.env.HOME || '', '.openclaw', 'logs', 'gateway.err.log');
 const pluginLogMatch = /foxmemory-openclaw-memory|foxmemory-plugin-v2/i;
 const gatewayLogPath = path.join(process.env.HOME || '', '.openclaw', 'logs', 'gateway.log');
@@ -370,12 +378,12 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
     // optional
   }
 
-  // Analytics from /v2/stats/memories?days=30
+  // Analytics from /v2/stats/memories?days=30 (event/activity lane)
   let memoriesByDay: MemoryDayEntry[] = [];
   let memorySummary: MemorySummary | null = null;
   let recentActivity: MemoryActivityEntry[] = [];
   let searches: MemorySearchStats | null = null;
-  let memoryCount = 0;
+  let analyticsCount = 0;
   try {
     const memStatsRes = await fetch(`${foxmemoryBaseUrl}/v2/stats/memories?days=30`, { method: 'GET' });
     if (memStatsRes.ok) {
@@ -393,10 +401,27 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
       memoriesByDay = data?.byDay ?? [];
       recentActivity = data?.recentActivity ?? [];
       searches = data?.searches ?? null;
-      memoryCount = data?.summary?.total ?? 0;
+      analyticsCount = data?.summary?.total ?? 0;
     }
   } catch {
     // optional
+  }
+
+  // Canonical total from Qdrant exact count (inventory truth lane)
+  let memoryCount = analyticsCount;
+  try {
+    const qRes = await fetch(`${qdrantBaseUrl}/collections/foxmemory/points/count`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ exact: true }),
+    });
+    if (qRes.ok) {
+      const qJson = (await qRes.json()) as { result?: { count?: number } };
+      const c = Number(qJson?.result?.count ?? NaN);
+      if (Number.isFinite(c)) memoryCount = c;
+    }
+  } catch {
+    // fall back to analytics count if qdrant endpoint unreachable
   }
 
   const retrieval = loadLatestRetrievalQuality();
