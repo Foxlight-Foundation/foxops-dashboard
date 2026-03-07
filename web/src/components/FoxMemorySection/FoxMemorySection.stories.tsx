@@ -49,6 +49,7 @@ const foxmemory: FoxmemoryResponse = {
   ],
   searches: { total: 142, avgResults: 5, avgTopScore: 0.759, avgLatencyMs: 376 },
   stats: { writesByMode: { infer: 3, raw: 1 }, memoryEvents: { ADD: 12, UPDATE: 3, DELETE: 1, NONE: 0 } },
+  diagnostics: { graphEnabled: true, graphLlmModel: 'gpt-4o-mini', neo4jUrl: 'bolt://neo4j:7687' },
 };
 
 export const Default: Story = {

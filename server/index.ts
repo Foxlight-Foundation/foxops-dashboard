@@ -81,6 +81,12 @@ interface MemorySearchStats {
   avgLatencyMs?: number;
 }
 
+interface FoxmemoryDiagnostics {
+  graphEnabled?: boolean;
+  graphLlmModel?: string | null;
+  neo4jUrl?: string | null;
+}
+
 interface FoxmemoryOverview {
   baseUrl: string;
   userId: string;
@@ -94,6 +100,7 @@ interface FoxmemoryOverview {
   recentActivity: MemoryActivityEntry[];
   searches: MemorySearchStats | null;
   stats: FoxmemoryStats | null;
+  diagnostics: FoxmemoryDiagnostics | null;
 }
 
 interface KillRequestBody {
@@ -109,13 +116,16 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
   let api: ApiResult = { ok: false, status: null, endpoint: null };
   let llmModel: string | null = null;
   let embedModel: string | null = null;
+  let diagnostics: FoxmemoryDiagnostics | null = null;
   try {
     const res = await fetch(`${foxmemoryBaseUrl}/v2/health`, { method: 'GET' });
     api = { ok: res.ok, status: res.status, endpoint: '/v2/health' };
     if (res.ok) {
-      const json = (await res.json()) as { data?: { llmModel?: string; embedModel?: string } };
+      const json = (await res.json()) as { data?: { llmModel?: string; embedModel?: string; diagnostics?: { graphEnabled?: boolean; graphLlmModel?: string; neo4jUrl?: string; neo4jConnected?: boolean; neo4jNodeCount?: number; neo4jRelationCount?: number } } };
       llmModel = json?.data?.llmModel ?? null;
       embedModel = json?.data?.embedModel ?? null;
+      const d = json?.data?.diagnostics;
+      if (d) diagnostics = { graphEnabled: d.graphEnabled, graphLlmModel: d.graphLlmModel ?? null, neo4jUrl: d.neo4jUrl ?? null, neo4jConnected: d.neo4jConnected, neo4jNodeCount: d.neo4jNodeCount ?? null, neo4jRelationCount: d.neo4jRelationCount ?? null };
     }
   } catch {
     // fallback to /health
@@ -143,30 +153,66 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
     // optional
   }
 
-  // Analytics from /v2/stats/memories?days=30 (event/activity lane)
+  // Analytics from /v2/stats/memories?days=30 + /v2/write-events (richer recent activity)
   let memoriesByDay: MemoryDayEntry[] = [];
   let memorySummary: MemorySummary | null = null;
   let recentActivity: MemoryActivityEntry[] = [];
   let searches: MemorySearchStats | null = null;
   let analyticsCount = 0;
   try {
-    const memStatsRes = await fetch(`${foxmemoryBaseUrl}/v2/stats/memories?days=30`, { method: 'GET' });
+    const [memStatsRes, writeEventsRes] = await Promise.all([
+      fetch(`${foxmemoryBaseUrl}/v2/stats/memories?days=30`, { method: 'GET' }),
+      fetch(`${foxmemoryBaseUrl}/v2/write-events?limit=20`, { method: 'GET' }),
+    ]);
     if (memStatsRes.ok) {
       const json = (await memStatsRes.json()) as {
         ok?: boolean;
         data?: {
           summary?: MemorySummary;
           byDay?: MemoryDayEntry[];
-          recentActivity?: MemoryActivityEntry[];
           searches?: MemorySearchStats;
         };
       };
       const data = json?.data;
       memorySummary = data?.summary ?? null;
       memoriesByDay = data?.byDay ?? [];
-      recentActivity = data?.recentActivity ?? [];
       searches = data?.searches ?? null;
       analyticsCount = data?.summary?.total ?? 0;
+    }
+    if (writeEventsRes.ok) {
+      const json = (await writeEventsRes.json()) as {
+        ok?: boolean;
+        data?: {
+          events?: Array<{
+            id: string;
+            ts: string;
+            event_type: string;
+            memory_id: string;
+            user_id: string | null;
+            run_id: string | null;
+            memory_text: string;
+            reason: string | null;
+            extracted_facts: string[] | null;
+            call_id: string | null;
+            latency_ms: number;
+            infer_mode: boolean;
+          }>;
+        };
+      };
+      recentActivity = (json?.data?.events ?? []).map((e) => ({
+        ts: e.ts,
+        event: e.event_type,
+        memoryId: e.memory_id,
+        userId: e.user_id ?? undefined,
+        runId: e.run_id ?? undefined,
+        preview: e.memory_text,
+        memoryText: e.memory_text,
+        reason: e.reason,
+        extractedFacts: e.extracted_facts,
+        callId: e.call_id,
+        latencyMs: e.latency_ms,
+        inferMode: e.infer_mode,
+      }));
     }
   } catch {
     // optional
@@ -202,6 +248,7 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
     recentActivity,
     searches,
     stats: foxmemoryStats,
+    diagnostics,
   };
 }
 
@@ -257,14 +304,18 @@ app.get('/api/crons', (_req: Request, res: Response) => {
 
 app.get('/api/foxmemory/prompts', async (_req: Request, res: Response) => {
   try {
-    const [p1, p2] = await Promise.all([
+    type PromptData = { data?: { prompt: string | null; effective_prompt: string | null; source: string; persisted: boolean } };
+    const [p1, p2, p3] = await Promise.all([
       fetch(`${foxmemoryBaseUrl}/v2/config/prompt`).then((r) => r.json()),
       fetch(`${foxmemoryBaseUrl}/v2/config/update-prompt`).then((r) => r.json()),
-    ]) as [{ data?: { prompt: string | null; source: string; persisted: boolean } }, { data?: { prompt: string | null; source: string; persisted: boolean } }];
+      fetch(`${foxmemoryBaseUrl}/v2/config/graph-prompt`).then((r) => r.json()),
+    ]) as [PromptData, PromptData, PromptData];
+    const fallback = { prompt: null, effective_prompt: null, source: 'unknown', persisted: false };
     return res.json({
       ok: true,
-      extractionPrompt: p1?.data ?? { prompt: null, source: 'unknown', persisted: false },
-      updatePrompt: p2?.data ?? { prompt: null, source: 'unknown', persisted: false },
+      extractionPrompt: p1?.data ?? fallback,
+      updatePrompt: p2?.data ?? fallback,
+      graphPrompt: p3?.data ?? fallback,
     });
   } catch (error: unknown) {
     return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
@@ -294,6 +345,31 @@ app.put('/api/foxmemory/config/update-prompt', async (req: Request<Record<string
     });
     const json = await upstream.json();
     return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.put('/api/foxmemory/config/graph-prompt', async (req: Request<Record<string, never>, unknown, { prompt: string | null }>, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/graph-prompt`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ prompt: req.body.prompt ?? null }),
+    });
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get('/api/foxmemory/graph-stats', async (_req: Request, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/graph/stats`);
+    if (!upstream.ok) return res.status(upstream.status).json({ ok: false, error: 'upstream error' });
+    const json = await upstream.json();
+    return res.json({ ok: true, data: json?.data ?? json });
   } catch (error: unknown) {
     return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }

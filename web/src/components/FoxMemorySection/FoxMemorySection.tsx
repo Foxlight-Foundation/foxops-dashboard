@@ -8,11 +8,14 @@ import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer,
 import type { TooltipProps } from 'recharts';
 import StatCard from '../StatCard/StatCard';
 import FoxMemoryAgentsView from '../FoxMemoryAgentsView/FoxMemoryAgentsView';
+import FoxMemoryGraphView from '../FoxMemoryGraphView/FoxMemoryGraphView';
 import { grad } from '../shared/styled';
 import {
   useGetFoxmemoryPromptsQuery,
+  useGetFoxmemoryGraphStatsQuery,
   useSetFoxmemoryExtractionPromptMutation,
   useSetFoxmemoryUpdatePromptMutation,
+  useSetFoxmemoryGraphPromptMutation,
 } from '../../services/dashboardApi';
 import type { FoxMemorySectionProps } from './FoxMemorySection.types';
 import type { ChartRange } from '../../types';
@@ -23,7 +26,7 @@ const fmtMs = (ms: number | null | undefined): string => {
   return `${Math.round(ms)}ms`;
 };
 
-type SubView = 'performance' | 'agents';
+type SubView = 'performance' | 'agents' | 'graph';
 
 const EVENT_COLORS: Record<string, string> = { ADD: '#2dce89', UPDATE: '#5e72e4', DELETE: '#f5365c', NONE: '#adb5bd' };
 
@@ -52,11 +55,16 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
   const { data: prompts, isFetching: promptsLoading } = useGetFoxmemoryPromptsQuery(undefined, {
     skip: subView !== 'agents',
   });
+  const { data: graphStatsData, isFetching: graphStatsLoading } = useGetFoxmemoryGraphStatsQuery(undefined, {
+    skip: subView !== 'graph',
+  });
   const [saveExtractionPrompt] = useSetFoxmemoryExtractionPromptMutation();
   const [saveUpdatePrompt] = useSetFoxmemoryUpdatePromptMutation();
+  const [saveGraphPrompt] = useSetFoxmemoryGraphPromptMutation();
 
   const onSaveExtractionPrompt = async (prompt: string | null) => { await saveExtractionPrompt({ prompt }).unwrap(); };
   const onSaveUpdatePrompt = async (prompt: string | null) => { await saveUpdatePrompt({ prompt }).unwrap(); };
+  const onSaveGraphPrompt = async (prompt: string | null) => { await saveGraphPrompt({ prompt }).unwrap(); };
 
   const chartData = useMemo(() => {
     if (!foxmemory) return [];
@@ -79,15 +87,23 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
       <Tabs value={subView} onChange={(_, v: SubView) => setSubView(v)} sx={{ mb: 2.5, borderBottom: 1, borderColor: 'divider' }}>
         <Tab label="Performance" value="performance" />
         <Tab label="Agents" value="agents" />
+        <Tab label="Graph" value="graph" />
       </Tabs>
 
-      {subView === 'agents' ? (
+      {subView === 'graph' ? (
+        <FoxMemoryGraphView
+          stats={graphStatsData?.data}
+          diagnostics={foxmemory?.diagnostics}
+          loading={graphStatsLoading}
+        />
+      ) : subView === 'agents' ? (
         <FoxMemoryAgentsView
           foxmemory={foxmemory}
           prompts={prompts}
           promptsLoading={promptsLoading}
           onSaveExtractionPrompt={onSaveExtractionPrompt}
           onSaveUpdatePrompt={onSaveUpdatePrompt}
+          onSaveGraphPrompt={onSaveGraphPrompt}
         />
       ) : (
       <>
@@ -272,8 +288,31 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
                     <TableRow key={`exp-${i}`}>
                       <TableCell colSpan={6} sx={{ p: 0, border: 0 }}>
                         <Collapse in={expandedRows.has(i)}>
-                          <Box sx={{ px: 2, py: 1, bgcolor: 'action.hover', fontFamily: 'monospace', fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'text.secondary' }}>
-                            {entry.preview || entry.memoryId}
+                          <Box sx={{ px: 2, py: 1.5, bgcolor: 'action.hover', display: 'flex', flexDirection: 'column', gap: 1 }}>
+                            {entry.reason && (
+                              <Box>
+                                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 0.25 }}>Reason</Typography>
+                                <Typography variant="caption" sx={{ fontStyle: 'italic' }}>{entry.reason}</Typography>
+                              </Box>
+                            )}
+                            <Box>
+                              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 0.25 }}>Memory</Typography>
+                              <Typography variant="caption" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'text.secondary' }}>
+                                {entry.memoryText || entry.preview || entry.memoryId}
+                              </Typography>
+                            </Box>
+                            {entry.extractedFacts && entry.extractedFacts.length > 0 && (
+                              <Box>
+                                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, display: 'block', mb: 0.25 }}>Extracted facts ({entry.extractedFacts.length})</Typography>
+                                <Box component="ul" sx={{ m: 0, pl: 2 }}>
+                                  {entry.extractedFacts.map((f, fi) => (
+                                    <Box component="li" key={fi}>
+                                      <Typography variant="caption" sx={{ fontFamily: 'monospace', color: 'text.secondary' }}>{f}</Typography>
+                                    </Box>
+                                  ))}
+                                </Box>
+                              </Box>
+                            )}
                           </Box>
                         </Collapse>
                       </TableCell>

@@ -27,6 +27,7 @@ const mockFoxmemory: FoxmemoryResponse = {
   recentActivity: [],
   searches: { total: 37, avgResults: 5, avgTopScore: 0.82, avgLatencyMs: 310 },
   stats: null,
+  diagnostics: { graphEnabled: true, graphLlmModel: 'gpt-4o-mini', neo4jUrl: 'bolt://neo4j:7687' },
 };
 
 describe('FoxMemorySection', () => {

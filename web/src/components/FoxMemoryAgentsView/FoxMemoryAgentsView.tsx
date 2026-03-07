@@ -102,7 +102,7 @@ const PromptEditor = ({
   );
 };
 
-const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtractionPrompt, onSaveUpdatePrompt }: FoxMemoryAgentsViewProps) => (
+const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtractionPrompt, onSaveUpdatePrompt, onSaveGraphPrompt }: FoxMemoryAgentsViewProps) => (
   <>
     <Grid container spacing={2} mb={2}>
       <Grid item xs={12} md={4}>
@@ -111,6 +111,39 @@ const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtract
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>Models</Typography>
             <ModelChip label="LLM" value={foxmemory?.llmModel} />
             <ModelChip label="Embedding" value={foxmemory?.embedModel} />
+            <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
+                <Typography variant="caption" color="text.secondary" sx={{ minWidth: 80 }}>Graph</Typography>
+                <Chip
+                  label={foxmemory?.diagnostics?.graphEnabled ? 'enabled' : 'disabled'}
+                  size="small"
+                  sx={{
+                    fontSize: 11,
+                    bgcolor: foxmemory?.diagnostics?.graphEnabled ? 'rgba(45,206,137,0.15)' : 'action.hover',
+                    color: foxmemory?.diagnostics?.graphEnabled ? '#2dce89' : 'text.secondary',
+                    fontWeight: 600,
+                  }}
+                />
+              </Box>
+              {foxmemory?.diagnostics?.graphEnabled && (
+                <>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 80 }}>Neo4j</Typography>
+                    <Chip
+                      label={foxmemory?.diagnostics?.neo4jConnected ? 'connected' : 'disconnected'}
+                      size="small"
+                      sx={{
+                        fontSize: 11,
+                        bgcolor: foxmemory?.diagnostics?.neo4jConnected ? 'rgba(45,206,137,0.15)' : 'rgba(245,54,92,0.12)',
+                        color: foxmemory?.diagnostics?.neo4jConnected ? '#2dce89' : '#f5365c',
+                        fontWeight: 600,
+                      }}
+                    />
+                  </Box>
+                  <ModelChip label="Graph LLM" value={foxmemory?.diagnostics?.graphLlmModel} />
+                </>
+              )}
+            </Box>
           </CardContent>
         </Card>
       </Grid>
@@ -119,7 +152,7 @@ const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtract
           <CardContent sx={{ p: 2.5 }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>About the agent pipeline</Typography>
             <Typography variant="body2" color="text.secondary">
-              FoxMemory uses a two-call LLM pipeline for every write. <strong>Call 1</strong> extracts discrete facts from the conversation. <strong>Call 2</strong> decides whether each fact is an ADD, UPDATE, DELETE, or NONE relative to existing memories.
+              FoxMemory uses a three-call LLM pipeline for every write. <strong>Call 1</strong> extracts discrete facts from the conversation. <strong>Call 2</strong> decides whether each fact is an ADD, UPDATE, DELETE, or NONE relative to existing memories. <strong>Call 3</strong> extracts entity relationships for the Neo4j knowledge graph (runs only when graph is enabled).
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
               Editing a prompt and saving will persist it across service restarts. Clear the prompt to revert to the built-in default.
@@ -150,6 +183,14 @@ const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtract
           effectivePrompt={prompts?.updatePrompt.effective_prompt ?? null}
           source={prompts?.updatePrompt.source ?? '—'}
           onSave={onSaveUpdatePrompt}
+        />
+        <PromptEditor
+          label="Call 3 — Graph Entity Extraction"
+          description="Extracts entity relationships from conversation for the Neo4j knowledge graph. Runs third on every write when graph is enabled."
+          currentPrompt={prompts?.graphPrompt.prompt ?? null}
+          effectivePrompt={prompts?.graphPrompt.effective_prompt ?? null}
+          source={prompts?.graphPrompt.source ?? '—'}
+          onSave={onSaveGraphPrompt}
         />
       </>
     )}

@@ -50,6 +50,10 @@ export interface MemoryActivityEntry {
   userId?: string;
   runId?: string;
   preview?: string;
+  memoryText?: string;
+  reason?: string | null;
+  extractedFacts?: string[] | null;
+  callId?: string | null;
   latencyMs?: number;
   inferMode?: boolean;
 }
@@ -80,6 +84,24 @@ export interface FoxmemoryPromptsResponse {
   ok: boolean;
   extractionPrompt: FoxmemoryPromptConfig;
   updatePrompt: FoxmemoryPromptConfig;
+  graphPrompt: FoxmemoryPromptConfig;
+}
+
+export interface FoxmemoryDiagnostics {
+  graphEnabled?: boolean;
+  graphLlmModel?: string | null;
+  neo4jUrl?: string | null;
+  neo4jConnected?: boolean;
+  neo4jNodeCount?: number | null;
+  neo4jRelationCount?: number | null;
+}
+
+export interface FoxmemoryGraphStats {
+  nodeCount: number;
+  edgeCount: number;
+  byLabel: Record<string, number>;
+  byRelationType: Record<string, number>;
+  mostConnected: Array<{ id: string; name: string; degree: number }>;
 }
 
 export interface FoxmemoryResponse {
@@ -96,6 +118,7 @@ export interface FoxmemoryResponse {
   recentActivity: MemoryActivityEntry[];
   searches: MemorySearchStats | null;
   stats: FoxmemoryStats | null;
+  diagnostics: FoxmemoryDiagnostics | null;
 }
 
 export interface CronJobSchedule {
