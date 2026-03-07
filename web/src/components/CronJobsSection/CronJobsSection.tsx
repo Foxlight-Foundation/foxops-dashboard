@@ -72,7 +72,7 @@ const CronJobsSection = ({ jobs }: CronJobsSectionProps) => {
         </Grid>
       </Grid>
 
-      <TableContainer component={Paper} elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, overflow: 'hidden' }}>
+      <TableContainer component={Paper} sx={{ borderRadius: 1, overflow: 'hidden' }}>
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>

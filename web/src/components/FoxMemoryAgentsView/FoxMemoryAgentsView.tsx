@@ -55,7 +55,7 @@ const PromptEditor = ({
   };
 
   return (
-    <Card elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, mb: 2 }}>
+    <Card sx={{ borderRadius: 1, mb: 2 }}>
       <CardContent sx={{ p: 2.5 }}>
         <Typography variant="subtitle1" fontWeight={700} gutterBottom>{label}</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{description}</Typography>
@@ -106,7 +106,7 @@ const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtract
   <>
     <Grid container spacing={2} mb={2}>
       <Grid item xs={12} md={4}>
-        <Card elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, height: '100%' }}>
+        <Card sx={{ borderRadius: 1, height: '100%' }}>
           <CardContent sx={{ p: 2.5 }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>Models</Typography>
             <ModelChip label="LLM" value={foxmemory?.llmModel} />
@@ -115,7 +115,7 @@ const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtract
         </Card>
       </Grid>
       <Grid item xs={12} md={8}>
-        <Card elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, height: '100%' }}>
+        <Card sx={{ borderRadius: 1, height: '100%' }}>
           <CardContent sx={{ p: 2.5 }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>About the agent pipeline</Typography>
             <Typography variant="body2" color="text.secondary">

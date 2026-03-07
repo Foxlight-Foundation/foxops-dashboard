@@ -1,84 +1,116 @@
-import { Box, Divider, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
+import { Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import AccessAlarmRoundedIcon from '@mui/icons-material/AccessAlarmRounded';
 import type { SidebarProps } from './Sidebar.types';
 
-const DRAWER_WIDTH = 250;
+const DRAWER_WIDTH = 300;
 
-const StyledDrawer = styled(Drawer)(({ theme }) => ({
+const StyledDrawer = styled(Drawer)(() => ({
   width: DRAWER_WIDTH,
   flexShrink: 0,
   '& .MuiDrawer-paper': {
     width: DRAWER_WIDTH,
     boxSizing: 'border-box',
-    borderRight: 0,
-    padding: theme.spacing(2),
-    boxShadow:
-      theme.palette.mode === 'dark'
-        ? '4px 0 16px rgba(0,0,0,0.4)'
-        : '4px 0 16px rgba(0,0,0,0.06)',
+    border: 0,
+    backgroundColor: 'transparent',
+    boxShadow: 'none',
+    overflow: 'visible',
   },
 }));
 
-const LogoBar = styled(Box)({
-  height: 44,
-  borderRadius: 10,
-  background: 'linear-gradient(135deg, #5e72e4 0%, #825ee4 100%)',
-  color: 'white',
+const SidebarPanel = styled(Box)(({ theme }) => ({
+  margin: theme.spacing(1.5),
+  height: `calc(100% - ${theme.spacing(3)})`,
+  borderRadius: 16,
+  backgroundColor: theme.palette.mode === 'dark' ? '#ffffff' : '#1a1a2e',
   display: 'flex',
-  alignItems: 'center',
-  paddingLeft: 10,
-  paddingRight: 10,
-  marginBottom: 8,
-});
+  flexDirection: 'column',
+  padding: theme.spacing(2),
+  boxShadow:
+    theme.palette.mode === 'dark'
+      ? '0 4px 24px rgba(0,0,0,0.12), inset 0 0 0 1px rgba(0,0,0,0.06)'
+      : '0 4px 24px rgba(0,0,0,0.5)',
+  overflow: 'hidden',
+}));
 
-const LogoAvatar = styled(Box)({
-  marginRight: 8,
-  borderRadius: '50%',
-  backgroundColor: '#fff',
-  display: 'grid',
-  placeItems: 'center',
-  padding: '3px',
-  boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-});
+const NavDivider = styled(Box)(({ theme }) => ({
+  height: 2,
+  background: theme.palette.mode === 'dark'
+    ? 'linear-gradient(to right, transparent, rgba(0,0,0,0.12) 25%, rgba(0,0,0,0.12) 75%, transparent)'
+    : 'linear-gradient(to right, transparent, rgba(255,255,255,0.18) 25%, rgba(255,255,255,0.18) 75%, transparent)',
+  margin: `${theme.spacing(1)} ${theme.spacing(-2)} ${theme.spacing(1.5)}`,
+}));
+
+const NavItem = styled(ListItemButton)(({ theme }) => ({
+  borderRadius: 10,
+  marginBottom: 4,
+  color: theme.palette.mode === 'dark' ? '#67748e' : 'rgba(255,255,255,0.65)',
+  '& .MuiListItemIcon-root': {
+    color: 'inherit',
+    minWidth: 36,
+  },
+  '& .MuiListItemText-primary': {
+    fontSize: 13,
+    fontWeight: 500,
+  },
+  '&:hover': {
+    backgroundColor:
+      theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.05)' : 'rgba(255,255,255,0.07)',
+  },
+  paddingTop: 10,
+  paddingBottom: 10,
+  '&.Mui-selected': {
+    background: 'linear-gradient(45deg, #1a3fc4 0%, #6690f5 100%)',
+    color: '#fff',
+    boxShadow: '0 4px 14px rgba(30,60,200,0.45)',
+    '& .MuiListItemIcon-root': { color: '#fff' },
+    '& .MuiListItemText-primary': { fontWeight: 700 },
+    '&:hover': { background: 'linear-gradient(45deg, #1a3fc4 0%, #6690f5 100%)' },
+  },
+}));
 
 const NAV_ITEMS = [
-  { section: 'foxmemory' as const, label: 'FoxMemory', icon: <HubRoundedIcon /> },
-  { section: 'acp' as const, label: 'Agent Sessions', icon: <DashboardRoundedIcon /> },
-  { section: 'cron' as const, label: 'Cron Jobs', icon: <AccessAlarmRoundedIcon /> },
+  { section: 'foxmemory' as const, label: 'FoxMemory', icon: <HubRoundedIcon fontSize="small" /> },
+  { section: 'acp' as const, label: 'Agent Sessions', icon: <DashboardRoundedIcon fontSize="small" /> },
+  { section: 'cron' as const, label: 'Cron Jobs', icon: <AccessAlarmRoundedIcon fontSize="small" /> },
 ];
 
 const Sidebar = ({ section, onSectionChange }: SidebarProps) => (
   <StyledDrawer variant="permanent">
-    <Box px={1} pb={1.5}>
-      <LogoBar>
-        <LogoAvatar>
-          <Typography component="span" sx={{ fontSize: 14, lineHeight: 1 }}>🦊</Typography>
-        </LogoAvatar>
-        <Typography variant="subtitle2" fontWeight={700}>FoxOps</Typography>
-      </LogoBar>
-    </Box>
-    <Divider sx={{ mb: 1.5 }} />
-    <List sx={{ gap: 0.7, display: 'grid' }}>
-      {NAV_ITEMS.map(({ section: s, label, icon }) => (
-        <ListItemButton
-          key={s}
-          selected={section === s}
-          onClick={() => onSectionChange(s)}
-          sx={{ borderRadius: 1 }}
+    <SidebarPanel>
+      <Box display="flex" alignItems="center" gap={1} px={0.5} py={0.75} mb={0.5}>
+        <Typography component="span" sx={{ fontSize: 22, lineHeight: 1 }}>🦊</Typography>
+        <Typography
+          variant="subtitle1"
+          fontWeight={700}
+          sx={{ color: (theme) => theme.palette.mode === 'dark' ? '#344767' : '#fff', letterSpacing: 0.3 }}
         >
-          <ListItemIcon>{icon}</ListItemIcon>
-          <ListItemText primary={label} />
-        </ListItemButton>
-      ))}
-    </List>
-    <Box sx={{ mt: 'auto', px: 1, pb: 0.5 }}>
-      <Typography variant="caption" color="text.secondary" sx={{ lineHeight: 1.4 }}>
-        Built with ❤️ by FoxLight Imagineering
-      </Typography>
-    </Box>
+          FoxOps
+        </Typography>
+      </Box>
+      <NavDivider />
+      <List disablePadding sx={{ display: 'grid' }}>
+        {NAV_ITEMS.map(({ section: s, label, icon }) => (
+          <NavItem key={s} selected={section === s} onClick={() => onSectionChange(s)}>
+            <ListItemIcon>{icon}</ListItemIcon>
+            <ListItemText primary={label} />
+          </NavItem>
+        ))}
+      </List>
+      <Box mt="auto" px={0.5}>
+        <Typography
+          variant="caption"
+          sx={{
+            color: (theme) => theme.palette.mode === 'dark' ? '#adb5bd' : 'rgba(255,255,255,0.35)',
+            lineHeight: 1.4,
+          }}
+        >
+          Built with ❤️ by FoxLight Imagineering
+        </Typography>
+      </Box>
+    </SidebarPanel>
   </StyledDrawer>
 );
 

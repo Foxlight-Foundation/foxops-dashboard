@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
-import { Box, Card, CardContent, Chip, Grid, Tab, Tabs, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Box, Card, CardContent, Chip, Collapse, Grid, LinearProgress, Tab, Table, TableBody, TableCell, TableHead, TableRow, Tabs, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import MemoryRoundedIcon from '@mui/icons-material/MemoryRounded';
 import TimelineRoundedIcon from '@mui/icons-material/TimelineRounded';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip as ReTooltip, XAxis, YAxis } from 'recharts';
+import type { TooltipProps } from 'recharts';
 import StatCard from '../StatCard/StatCard';
 import FoxMemoryAgentsView from '../FoxMemoryAgentsView/FoxMemoryAgentsView';
-import { LogPaper, grad } from '../shared/styled';
+import { grad } from '../shared/styled';
 import {
   useGetFoxmemoryPromptsQuery,
   useSetFoxmemoryExtractionPromptMutation,
@@ -15,12 +17,37 @@ import {
 import type { FoxMemorySectionProps } from './FoxMemorySection.types';
 import type { ChartRange } from '../../types';
 
+const fmtMs = (ms: number | null | undefined): string => {
+  if (ms == null) return '—';
+  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`;
+  return `${Math.round(ms)}ms`;
+};
+
 type SubView = 'performance' | 'agents';
 
 const EVENT_COLORS: Record<string, string> = { ADD: '#2dce89', UPDATE: '#5e72e4', DELETE: '#f5365c', NONE: '#adb5bd' };
 
+const PillTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
+  if (!active || !payload?.length) return null;
+  const { name, value, color } = payload[0];
+  return (
+    <Box sx={{ bgcolor: 'rgba(15,17,26,0.92)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff', px: 1.5, py: 0.5, borderRadius: 10, fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.75, pointerEvents: 'none' }}>
+      {color && <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />}
+      {label && <span style={{ opacity: 0.6 }}>{label}</span>}
+      {label && <span style={{ opacity: 0.4 }}>·</span>}
+      <span>{name ?? ''} {value}</span>
+    </Box>
+  );
+};
+
 const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemorySectionProps) => {
   const [subView, setSubView] = useState<SubView>('performance');
+  const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
+  const toggleRow = (i: number) => setExpandedRows((prev) => {
+    const next = new Set(prev);
+    next.has(i) ? next.delete(i) : next.add(i);
+    return next;
+  });
 
   const { data: prompts, isFetching: promptsLoading } = useGetFoxmemoryPromptsQuery(undefined, {
     skip: subView !== 'agents',
@@ -66,7 +93,7 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
       <>
       <Grid container spacing={1.5} mb={2.5}>
         <Grid item xs={12} sm={6} md={3}>
-          <StatCard title="Total Memories Stored" value={foxmemory?.memorySummary?.total ?? foxmemory?.memoryCount ?? 0} icon={<TimelineRoundedIcon fontSize="small" />} iconColor={grad('#5e72e4', '#825ee4')} />
+          <StatCard title="Total Memories Stored" value={foxmemory?.memoryCount ?? 0} icon={<TimelineRoundedIcon fontSize="small" />} iconColor={grad('#5e72e4', '#825ee4')} />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard
@@ -88,9 +115,9 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
 
       <Grid container spacing={1.5}>
         <Grid item xs={12} lg={7}>
-          <Card elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, height: '100%' }}>
-            <CardContent sx={{ p: 3 }}>
-              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+          <Card sx={{ borderRadius: 1, height: '100%' }}>
+            <CardContent sx={{ p: 3, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
+              <Box display="flex" justifyContent="space-between" alignItems="center" mb={1} flexShrink={0}>
                 <Typography variant="h6" fontWeight={700}>Memory events by day</Typography>
                 <ToggleButtonGroup exclusive size="small" value={chartRange} onChange={(_, v: ChartRange | null) => v && onChartRangeChange(v)}>
                   <ToggleButton value="7d">7d</ToggleButton>
@@ -98,20 +125,20 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
                   <ToggleButton value="all">All</ToggleButton>
                 </ToggleButtonGroup>
               </Box>
-              <Grid container spacing={1}>
+              <Grid container spacing={1} sx={{ flex: 1, minHeight: 0 }}>
                 {(['ADD', 'UPDATE', 'DELETE'] as const).map((event) => (
-                  <Grid item xs={12} key={event}>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600, color: EVENT_COLORS[event] }}>
+                  <Grid item xs={12} key={event} sx={{ display: 'flex', flexDirection: 'column' }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25, fontWeight: 600, color: EVENT_COLORS[event], flexShrink: 0 }}>
                       {event}
                     </Typography>
-                    <Box sx={{ height: 72 }}>
+                    <Box sx={{ flex: 1, minHeight: 60 }}>
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={chartData} margin={{ top: 2, right: 8, left: -18, bottom: 2 }}>
                           <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
                           <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                           <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={28} />
-                          <ReTooltip />
-                          <Bar dataKey={event} fill={EVENT_COLORS[event]} radius={[3, 3, 0, 0]} />
+                          <ReTooltip cursor={false} content={<PillTooltip />} isAnimationActive={false} />
+                          <Bar dataKey={event} fill={EVENT_COLORS[event]} radius={[3, 3, 0, 0]} activeBar={false} />
                         </BarChart>
                       </ResponsiveContainer>
                     </Box>
@@ -122,83 +149,142 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
           </Card>
         </Grid>
         <Grid item xs={12} lg={5}>
-          <Card elevation={0} sx={{ border: 1, borderColor: 'divider', borderRadius: 1, height: '100%' }}>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h6" fontWeight={700} gutterBottom>FoxMemory details</Typography>
-              <Typography color="text.secondary">Base URL: {foxmemory?.baseUrl || '—'}</Typography>
-              {foxmemory?.searches && (
-                <Typography color="text.secondary" sx={{ mb: 1 }}>
-                  Searches: {foxmemory.searches.total} · avg results {foxmemory.searches.avgResults ?? '—'} · avg score {foxmemory.searches.avgTopScore?.toFixed(3) ?? '—'}
-                </Typography>
-              )}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, height: '100%' }}>
+            {/* Search Performance */}
+            <Card sx={{ borderRadius: 1 }}>
+              <CardContent sx={{ p: 2.5 }}>
+                <Typography variant="subtitle1" fontWeight={700} gutterBottom>Search Performance (30d)</Typography>
+                <Grid container spacing={1.5}>
+                  {[
+                    { label: 'Total searches', value: foxmemory?.searches?.total ?? '—' },
+                    { label: 'Avg results', value: foxmemory?.searches?.avgResults?.toFixed(1) ?? '—' },
+                    { label: 'Avg latency', value: fmtMs(foxmemory?.searches?.avgLatencyMs) },
+                  ].map(({ label, value }) => (
+                    <Grid item xs={4} key={label}>
+                      <Box sx={{ p: 1.25, borderRadius: 1, bgcolor: 'action.hover', textAlign: 'center' }}>
+                        <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.2 }}>{value}</Typography>
+                        <Typography variant="caption" color="text.secondary">{label}</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+                <Box sx={{ mt: 1.5 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                    <Typography variant="caption" color="text.secondary">Avg top score</Typography>
+                    <Typography variant="caption" fontWeight={700}>
+                      {foxmemory?.searches?.avgTopScore != null ? foxmemory.searches.avgTopScore.toFixed(3) : '—'}
+                    </Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={(foxmemory?.searches?.avgTopScore ?? 0) * 100}
+                    sx={{ height: 6, borderRadius: 3, bgcolor: 'action.hover', '& .MuiLinearProgress-bar': { bgcolor: '#11cdef' } }}
+                  />
+                </Box>
+              </CardContent>
+            </Card>
 
-              <Grid container spacing={1} sx={{ mb: 1.25 }}>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Write mode mix</Typography>
-                  <Box sx={{ height: 120 }}>
+            {/* Write Latency */}
+            <Card sx={{ borderRadius: 1 }}>
+              <CardContent sx={{ p: 2.5 }}>
+                <Typography variant="subtitle1" fontWeight={700} gutterBottom>Write Latency (30d)</Typography>
+                <Grid container spacing={1.5} sx={{ mb: 1.5 }}>
+                  {[
+                    { label: 'avg', value: fmtMs(foxmemory?.memorySummary?.writeLatency?.avgMs) },
+                    { label: 'min', value: fmtMs(foxmemory?.memorySummary?.writeLatency?.minMs) },
+                    { label: 'max', value: fmtMs(foxmemory?.memorySummary?.writeLatency?.maxMs) },
+                  ].map(({ label, value }) => (
+                    <Grid item xs={4} key={label}>
+                      <Box sx={{ p: 1.25, borderRadius: 1, bgcolor: 'action.hover', textAlign: 'center' }}>
+                        <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.2 }}>{value}</Typography>
+                        <Typography variant="caption" color="text.secondary">{label}</Typography>
+                      </Box>
+                    </Grid>
+                  ))}
+                </Grid>
+                {foxmemory?.memorySummary?.writeLatency && (
+                  <Box>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                      <Typography variant="caption" color="text.secondary">avg vs max</Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {Math.round((foxmemory.memorySummary.writeLatency.avgMs / foxmemory.memorySummary.writeLatency.maxMs) * 100)}%
+                      </Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={(foxmemory.memorySummary.writeLatency.avgMs / foxmemory.memorySummary.writeLatency.maxMs) * 100}
+                      sx={{ height: 6, borderRadius: 3, bgcolor: 'action.hover', '& .MuiLinearProgress-bar': { bgcolor: '#f5365c' } }}
+                    />
+                  </Box>
+                )}
+                <Box sx={{ mt: 1.5 }}>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>Write mode mix</Typography>
+                  <Box sx={{ height: 80 }}>
                     <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
-                        <Pie data={modeData} dataKey="value" nameKey="name" innerRadius={24} outerRadius={42} paddingAngle={2}>
+                        <Pie data={modeData} dataKey="value" nameKey="name" innerRadius={18} outerRadius={34} paddingAngle={2}>
                           <Cell fill="#5e72e4" />
                           <Cell fill="#11cdef" />
                         </Pie>
-                        <ReTooltip />
+                        <ReTooltip content={<PillTooltip />} isAnimationActive={false} />
                       </PieChart>
                     </ResponsiveContainer>
                   </Box>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="caption" color="text.secondary">Recent activity</Typography>
-                  <Box sx={{ mt: 0.5 }}>
-                    {(foxmemory?.recentActivity || []).slice(0, 4).map((entry, i) => (
-                      <Box key={i} sx={{ mb: 0.5 }}>
-                        <Chip
-                          size="small"
-                          label={entry.event}
-                          sx={{ mr: 0.5, fontSize: 10, height: 18, bgcolor: EVENT_COLORS[entry.event] || '#adb5bd', color: '#fff' }}
-                        />
-                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>
-                          {entry.preview ? entry.preview.slice(0, 40) : entry.memoryId.slice(0, 8)}
-                        </Typography>
-                      </Box>
-                    ))}
-                    {!(foxmemory?.recentActivity || []).length && (
-                      <Typography variant="caption" color="text.secondary">No recent activity.</Typography>
-                    )}
-                  </Box>
-                </Grid>
-              </Grid>
-
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Recent memory-related error lines ({foxmemory?.recentErrors?.count ?? 0})</Typography>
-              <LogPaper variant="outlined" maxH={140}>
-                {(foxmemory?.recentErrors?.samples || []).length
-                  ? foxmemory!.recentErrors.samples.map((line, i) => (
-                      <Typography key={i} variant="caption" display="block" sx={{ fontFamily: 'monospace', mb: 0.75 }}>{line}</Typography>
-                    ))
-                  : <Typography variant="body2" color="text.secondary">No recent error samples found.</Typography>}
-              </LogPaper>
-
-              <Typography variant="subtitle2" fontWeight={700} sx={{ mt: 1.5, mb: 1 }}>
-                Plugin logs ({foxmemory?.pluginLogs?.count ?? 0})
-              </Typography>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                Source: {foxmemory?.pluginLogs?.file || '—'} · showing last {(foxmemory?.pluginLogs?.lines || []).length} lines
-              </Typography>
-              <LogPaper variant="outlined" maxH={220}>
-                {(foxmemory?.pluginLogs?.lines || []).length ? (
-                  foxmemory!.pluginLogs.lines.map((line, i) => (
-                    <Typography key={i} variant="caption" display="block" sx={{ fontFamily: 'monospace', mb: 0.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                      {line}
-                    </Typography>
-                  ))
-                ) : (
-                  <Typography variant="body2" color="text.secondary">No plugin log lines found yet.</Typography>
-                )}
-              </LogPaper>
-            </CardContent>
-          </Card>
+                </Box>
+              </CardContent>
+            </Card>
+          </Box>
         </Grid>
       </Grid>
+
+      {/* Recent Activity */}
+      <Card sx={{ borderRadius: 1, mt: 1.5 }}>
+        <CardContent sx={{ p: 2.5 }}>
+          <Typography variant="subtitle1" fontWeight={700} gutterBottom>Recent Activity</Typography>
+          {(foxmemory?.recentActivity || []).length === 0 ? (
+            <Typography variant="body2" color="text.secondary">No recent activity.</Typography>
+          ) : (
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  {['Type', 'Mode', 'Latency', 'Id', 'Date', ''].map((h) => (
+                    <TableCell key={h} sx={{ fontWeight: 700, fontSize: 11, py: 0.75, color: 'text.secondary' }}>{h}</TableCell>
+                  ))}
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {(foxmemory?.recentActivity || []).map((entry, i) => {
+                  const d = new Date(entry.ts);
+                  const date = `${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getDate().toString().padStart(2, '0')}/${d.getFullYear().toString().slice(-2)} at ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+                  return [
+                    <TableRow key={`row-${i}`} onClick={() => toggleRow(i)} sx={{ cursor: 'pointer', '&:hover': { bgcolor: 'action.hover' } }}>
+                      <TableCell sx={{ py: 0.75 }}>
+                        <Chip size="small" label={entry.event} sx={{ height: 20, fontSize: 10, bgcolor: EVENT_COLORS[entry.event] || '#adb5bd', color: '#fff' }} />
+                      </TableCell>
+                      <TableCell sx={{ py: 0.75, fontSize: 11 }}>{entry.inferMode ? 'infer' : 'raw'}</TableCell>
+                      <TableCell sx={{ py: 0.75, fontSize: 11, fontFamily: 'monospace' }}>{fmtMs(entry.latencyMs)}</TableCell>
+                      <TableCell sx={{ py: 0.75, fontSize: 11, fontFamily: 'monospace' }}>{entry.memoryId.slice(0, 8)}</TableCell>
+                      <TableCell sx={{ py: 0.75, fontSize: 11 }}>{date}</TableCell>
+                      <TableCell sx={{ py: 0.75, width: 24 }}>
+                        <ExpandMoreRoundedIcon sx={{ fontSize: 16, color: 'text.secondary', transition: 'transform 0.2s', transform: expandedRows.has(i) ? 'rotate(180deg)' : 'rotate(0deg)' }} />
+                      </TableCell>
+                    </TableRow>,
+                    <TableRow key={`exp-${i}`}>
+                      <TableCell colSpan={6} sx={{ p: 0, border: 0 }}>
+                        <Collapse in={expandedRows.has(i)}>
+                          <Box sx={{ px: 2, py: 1, bgcolor: 'action.hover', fontFamily: 'monospace', fontSize: 11, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'text.secondary' }}>
+                            {entry.preview || entry.memoryId}
+                          </Box>
+                        </Collapse>
+                      </TableCell>
+                    </TableRow>,
+                  ];
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
       </>
       )}
     </>

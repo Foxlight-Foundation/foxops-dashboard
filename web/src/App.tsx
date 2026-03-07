@@ -65,6 +65,10 @@ const App = () => {
   const [killSession, { isLoading: killLoading }] = useKillSessionMutation();
   const [deleteSession, { isLoading: deleteLoading }] = useDeleteSessionMutation();
 
+  const cardShadow = mode === 'dark'
+    ? '0 2px 8px rgba(0,0,0,0.3), 0 10px 28px rgba(0,0,0,0.4)'
+    : '0 2px 4px rgba(0,0,0,0.04), 0 8px 22px rgba(0,0,0,0.12)';
+
   const theme = useMemo(
     () =>
       createTheme({
@@ -75,8 +79,9 @@ const App = () => {
         },
         shape: { borderRadius: 10 },
         typography: { fontFamily: '"Ubuntu", sans-serif' },
+        shadows: Array.from({ length: 25 }, (_, i) => (i === 0 ? 'none' : cardShadow)) as Parameters<typeof createTheme>[0]['shadows'],
       }),
-    [mode],
+    [mode, cardShadow],
   );
 
   const allSessions = sessionsData?.sessions || [];

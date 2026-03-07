@@ -3,13 +3,8 @@ import { styled } from '@mui/material/styles';
 import type { StatCardProps } from './StatCard.types';
 
 const StyledCard = styled(Card)(({ theme }) => ({
-  border: `1px solid ${theme.palette.divider}`,
   borderRadius: theme.shape.borderRadius,
   backgroundColor: theme.palette.background.paper,
-  boxShadow:
-    theme.palette.mode === 'dark'
-      ? '0 4px 20px rgba(0,0,0,0.35)'
-      : '0 4px 20px rgba(0,0,0,0.07)',
 }));
 
 const Content = styled(CardContent)({
@@ -32,7 +27,7 @@ const IconBox = styled(Box, {
 }));
 
 const StatCard = ({ title, value, icon, iconColor }: StatCardProps) => (
-  <StyledCard elevation={0}>
+  <StyledCard>
     <Content>
       <Box display="flex" alignItems="center" gap={2}>
         <IconBox iconColor={iconColor}>{icon}</IconBox>

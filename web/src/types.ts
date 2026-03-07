@@ -95,28 +95,6 @@ export interface FoxmemoryResponse {
   memorySummary: MemorySummary | null;
   recentActivity: MemoryActivityEntry[];
   searches: MemorySearchStats | null;
-  retrievalQuality: { value: string; source: string };
-  recentErrors: { count: number; samples: string[] };
-  autoCapture: {
-    lastAutoCaptureAt: string | null;
-    captureSuccessCountWindow: number;
-    captureWindowMinutes: number;
-    lastCaptureError: { at: string; line: string } | null;
-  };
-  pluginTelemetry: {
-    windowMinutes: number;
-    captureAttempts: number;
-    captureSuccess: number;
-    captureNone: number;
-    captureFailed: number;
-    recallFailed: number;
-    modeInfer: number;
-    modeRaw: number;
-    lastCaptureMode: string | null;
-    lastEndpoint: string | null;
-    recent: { at: string; type: string; mode?: string }[];
-  };
-  pluginLogs: { file: string; count: number; lines: string[] };
   stats: FoxmemoryStats | null;
 }
 

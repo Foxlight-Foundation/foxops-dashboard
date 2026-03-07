@@ -26,11 +26,6 @@ const mockFoxmemory: FoxmemoryResponse = {
   memorySummary: { total: 142, byEvent: { ADD: 120, UPDATE: 18, DELETE: 4, NONE: 0 } },
   recentActivity: [],
   searches: { total: 37, avgResults: 5, avgTopScore: 0.82, avgLatencyMs: 310 },
-  retrievalQuality: { value: '94%', source: 'eval-001.json' },
-  recentErrors: { count: 0, samples: [] },
-  autoCapture: { lastAutoCaptureAt: null, captureSuccessCountWindow: 0, captureWindowMinutes: 60, lastCaptureError: null },
-  pluginTelemetry: { windowMinutes: 60, captureAttempts: 0, captureSuccess: 0, captureNone: 0, captureFailed: 0, recallFailed: 0, modeInfer: 0, modeRaw: 0, lastCaptureMode: null, lastEndpoint: null, recent: [] },
-  pluginLogs: { file: '/path/to/gateway.log', count: 0, lines: [] },
   stats: null,
 };
 
@@ -42,7 +37,7 @@ describe('FoxMemorySection', () => {
 
   it('renders search count stat card', () => {
     render(<FoxMemorySection foxmemory={mockFoxmemory} chartRange="7d" onChartRangeChange={() => {}} />, { wrapper });
-    expect(screen.getByText('37')).toBeInTheDocument();
+    expect(screen.getAllByText('37').length).toBeGreaterThan(0);
   });
 
   it('renders healthy api status', () => {
@@ -50,8 +45,8 @@ describe('FoxMemorySection', () => {
     expect(screen.getByText('healthy')).toBeInTheDocument();
   });
 
-  it('renders no error samples message when empty', () => {
+  it('renders write mode mix section', () => {
     render(<FoxMemorySection foxmemory={mockFoxmemory} chartRange="7d" onChartRangeChange={() => {}} />, { wrapper });
-    expect(screen.getByText('No recent error samples found.')).toBeInTheDocument();
+    expect(screen.getByText('Write mode mix')).toBeInTheDocument();
   });
 });

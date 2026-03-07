@@ -48,11 +48,6 @@ const foxmemory: FoxmemoryResponse = {
     { ts: '2026-03-05T13:10:05Z', event: 'UPDATE', memoryId: 'a123456c-5678', preview: 'assistant: Done ✅', latencyMs: 9800, inferMode: true },
   ],
   searches: { total: 142, avgResults: 5, avgTopScore: 0.759, avgLatencyMs: 376 },
-  retrievalQuality: { value: '91%', source: 'root-cause-eval-001.json' },
-  recentErrors: { count: 0, samples: [] },
-  autoCapture: { lastAutoCaptureAt: '2026-03-05T14:22:11Z', captureSuccessCountWindow: 4, captureWindowMinutes: 60, lastCaptureError: null },
-  pluginTelemetry: { windowMinutes: 60, captureAttempts: 5, captureSuccess: 4, captureNone: 1, captureFailed: 0, recallFailed: 0, modeInfer: 3, modeRaw: 1, lastCaptureMode: 'infer', lastEndpoint: '/v2/memories', recent: [] },
-  pluginLogs: { file: '/root/.openclaw/logs/gateway.log', count: 0, lines: [] },
   stats: { writesByMode: { infer: 3, raw: 1 }, memoryEvents: { ADD: 12, UPDATE: 3, DELETE: 1, NONE: 0 } },
 };
 

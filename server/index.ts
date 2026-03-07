@@ -19,10 +19,6 @@ const qdrantBaseUrl = process.env.QDRANT_BASE_URL || (() => {
     return 'http://127.0.0.1:6333';
   }
 })();
-const gatewayErrLogPath = path.join(process.env.HOME || '', '.openclaw', 'logs', 'gateway.err.log');
-const pluginLogMatch = /foxmemory-openclaw-memory|foxmemory-plugin-v2/i;
-const gatewayLogPath = path.join(process.env.HOME || '', '.openclaw', 'logs', 'gateway.log');
-const artifactsDir = path.join(workspaceRoot, 'artifacts');
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -37,50 +33,6 @@ interface OpenclawSession {
   tokensPct?: number;
   flags?: string[];
   [key: string]: unknown;
-}
-
-interface RetrievalQuality {
-  value: string;
-  source: string;
-  raw?: { total: number; searchable: number };
-}
-
-interface ErrorSamples {
-  count: number;
-  samples: string[];
-}
-
-interface AutoCaptureHealth {
-  lastAutoCaptureAt: string | null;
-  captureSuccessCountWindow: number;
-  captureWindowMinutes: number;
-  lastCaptureError: { at: string; line: string } | null;
-}
-
-interface PluginTelemetryEvent {
-  at: string;
-  type: string;
-  mode?: string;
-}
-
-interface PluginTelemetry {
-  windowMinutes: number;
-  captureAttempts: number;
-  captureSuccess: number;
-  captureNone: number;
-  captureFailed: number;
-  recallFailed: number;
-  modeInfer: number;
-  modeRaw: number;
-  lastCaptureMode: string | null;
-  lastEndpoint: string | null;
-  recent: PluginTelemetryEvent[];
-}
-
-interface PluginLogs {
-  file: string;
-  count: number;
-  lines: string[];
 }
 
 interface ApiResult {
@@ -141,11 +93,6 @@ interface FoxmemoryOverview {
   memorySummary: MemorySummary | null;
   recentActivity: MemoryActivityEntry[];
   searches: MemorySearchStats | null;
-  retrievalQuality: RetrievalQuality;
-  recentErrors: ErrorSamples;
-  autoCapture: AutoCaptureHealth;
-  pluginTelemetry: PluginTelemetry;
-  pluginLogs: PluginLogs;
   stats: FoxmemoryStats | null;
 }
 
@@ -156,188 +103,6 @@ interface KillRequestBody {
 }
 
 // ── Data loading ───────────────────────────────────────────────────────────────
-
-const countRecentFoxmemoryErrors = (): ErrorSamples => {
-  if (!fs.existsSync(gatewayErrLogPath)) return { count: 0, samples: [] };
-  const lines = fs.readFileSync(gatewayErrLogPath, 'utf8').split('\n').slice(-1500);
-  const matches = lines.filter((l) => /foxmemory|mem0|qdrant|memory api/i.test(l));
-  return { count: matches.length, samples: matches.slice(-5) };
-}
-
-const loadLatestRetrievalQuality = (): RetrievalQuality => {
-  if (!fs.existsSync(artifactsDir)) return { value: '—', source: 'no artifacts dir' };
-  const files = fs
-    .readdirSync(artifactsDir)
-    .filter((f) => /^root-cause-eval-.*\.json$/.test(f))
-    .sort();
-
-  if (!files.length) return { value: '—', source: 'no root-cause eval artifacts' };
-
-  const latest = files[files.length - 1];
-  const fullPath = path.join(artifactsDir, latest);
-  try {
-    const json = JSON.parse(fs.readFileSync(fullPath, 'utf8')) as Record<string, unknown>;
-    const totals = json?.totals as Record<string, unknown> | undefined;
-    const total = Number(totals?.writes_attempted ?? json?.n ?? 0);
-    const searchable = Number(totals?.searchable_immediate ?? totals?.searchable ?? 0);
-    if (!total) return { value: '—', source: latest };
-    const pct = Math.round((searchable / total) * 100);
-    return { value: `${pct}%`, source: latest, raw: { total, searchable } };
-  } catch {
-    return { value: '—', source: `${latest} (parse error)` };
-  }
-}
-
-const readLogTailLines = (filePath: string, maxBytes = 2 * 1024 * 1024): string[] => {
-  const st = fs.statSync(filePath);
-  const size = st.size;
-  const start = Math.max(0, size - maxBytes);
-  const len = size - start;
-  const fd = fs.openSync(filePath, 'r');
-  try {
-    const buf = Buffer.alloc(len);
-    fs.readSync(fd, buf, 0, len, start);
-    return buf.toString('utf8').split('\n');
-  } finally {
-    fs.closeSync(fd);
-  }
-}
-
-const loadAutoCaptureHealth = (windowMinutes = 60): AutoCaptureHealth => {
-  if (!fs.existsSync(gatewayLogPath)) {
-    return {
-      lastAutoCaptureAt: null,
-      captureSuccessCountWindow: 0,
-      captureWindowMinutes: windowMinutes,
-      lastCaptureError: null,
-    };
-  }
-
-  const lines = readLogTailLines(gatewayLogPath, 2 * 1024 * 1024);
-  const successNeedle = 'auto-captured';
-  const errorNeedle = 'capture failed:';
-
-  let lastAutoCaptureAt: string | null = null;
-  let lastCaptureError: { at: string; line: string } | null = null;
-  let captureSuccessCountWindow = 0;
-  const now = Date.now();
-  const windowMs = windowMinutes * 60 * 1000;
-
-  for (const line of lines) {
-    if (!line) continue;
-    const ts = line.slice(0, 24).trim();
-    const t = Date.parse(ts);
-
-    if (line.includes(successNeedle)) {
-      if (!lastAutoCaptureAt || (Number.isFinite(t) && t > Date.parse(lastAutoCaptureAt))) {
-        lastAutoCaptureAt = Number.isFinite(t) ? new Date(t).toISOString() : ts;
-      }
-      if (Number.isFinite(t) && now - t <= windowMs) {
-        captureSuccessCountWindow += 1;
-      }
-    }
-
-    if (line.includes(errorNeedle)) {
-      lastCaptureError = {
-        at: Number.isFinite(t) ? new Date(t).toISOString() : ts,
-        line: line.slice(line.indexOf(errorNeedle)),
-      };
-    }
-  }
-
-  return {
-    lastAutoCaptureAt,
-    captureSuccessCountWindow,
-    captureWindowMinutes: windowMinutes,
-    lastCaptureError,
-  };
-}
-
-const loadPluginTelemetry = (windowMinutes = 60): PluginTelemetry => {
-  if (!fs.existsSync(gatewayLogPath)) {
-    return {
-      windowMinutes,
-      captureAttempts: 0,
-      captureSuccess: 0,
-      captureNone: 0,
-      captureFailed: 0,
-      recallFailed: 0,
-      modeInfer: 0,
-      modeRaw: 0,
-      lastCaptureMode: null,
-      lastEndpoint: null,
-      recent: [],
-    };
-  }
-
-  const lines = readLogTailLines(gatewayLogPath, 2 * 1024 * 1024);
-  const now = Date.now();
-  const windowMs = windowMinutes * 60 * 1000;
-  const out: PluginTelemetry = {
-    windowMinutes,
-    captureAttempts: 0,
-    captureSuccess: 0,
-    captureNone: 0,
-    captureFailed: 0,
-    recallFailed: 0,
-    modeInfer: 0,
-    modeRaw: 0,
-    lastCaptureMode: null,
-    lastEndpoint: null,
-    recent: [],
-  };
-
-  for (const line of lines) {
-    if (!line || !pluginLogMatch.test(line)) continue;
-    const ts = line.slice(0, 24).trim();
-    const t = Date.parse(ts);
-    if (Number.isFinite(t) && now - t > windowMs) continue;
-
-    if (line.includes('auto-captured memory payload')) {
-      out.captureSuccess += 1;
-      out.captureAttempts += 1;
-      const mode = line.includes('mode=raw') ? 'raw' : 'infer';
-      out.lastCaptureMode = mode;
-      if (mode === 'raw') {
-        out.modeRaw += 1;
-        out.lastEndpoint = '/memory.raw_write';
-      } else {
-        out.modeInfer += 1;
-        out.lastEndpoint = line.includes('/v2/') ? '/v2/memories' : '/v1/memories';
-      }
-      out.recent.push({ at: Number.isFinite(t) ? new Date(t).toISOString() : ts, type: 'capture_success', mode });
-    } else if (line.includes('capture none')) {
-      out.captureNone += 1;
-      out.captureAttempts += 1;
-      out.recent.push({ at: Number.isFinite(t) ? new Date(t).toISOString() : ts, type: 'capture_none' });
-    } else if (line.includes('capture failed')) {
-      out.captureFailed += 1;
-      out.captureAttempts += 1;
-      out.recent.push({ at: Number.isFinite(t) ? new Date(t).toISOString() : ts, type: 'capture_failed' });
-    } else if (line.includes('recall failed')) {
-      out.recallFailed += 1;
-      out.recent.push({ at: Number.isFinite(t) ? new Date(t).toISOString() : ts, type: 'recall_failed' });
-    }
-  }
-
-  out.recent = out.recent.slice(-10);
-  return out;
-}
-
-const loadPluginLogTail = (limit = 120): PluginLogs => {
-  if (!fs.existsSync(gatewayLogPath)) {
-    return { file: gatewayLogPath, count: 0, lines: [] };
-  }
-
-  const lines = readLogTailLines(gatewayLogPath, 2 * 1024 * 1024)
-    .filter((line) => pluginLogMatch.test(line));
-
-  return {
-    file: gatewayLogPath,
-    count: lines.length,
-    lines: lines.slice(-limit),
-  };
-}
 
 const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
   // Health probe via v2
@@ -424,12 +189,6 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
     // fall back to analytics count if qdrant endpoint unreachable
   }
 
-  const retrieval = loadLatestRetrievalQuality();
-  const errors = countRecentFoxmemoryErrors();
-  const autoCapture = loadAutoCaptureHealth(60);
-  const pluginTelemetry = loadPluginTelemetry(60);
-  const pluginLogs = loadPluginLogTail(120);
-
   return {
     baseUrl: foxmemoryBaseUrl,
     userId: foxmemoryUserId,
@@ -442,11 +201,6 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
     memorySummary,
     recentActivity,
     searches,
-    retrievalQuality: retrieval,
-    recentErrors: errors,
-    autoCapture,
-    pluginTelemetry,
-    pluginLogs,
     stats: foxmemoryStats,
   };
 }
