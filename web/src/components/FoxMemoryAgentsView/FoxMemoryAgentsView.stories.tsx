@@ -33,24 +33,26 @@ const promptsDefault: FoxmemoryPromptsResponse = {
   ok: true,
   extractionPrompt: { prompt: null, effective_prompt: defaultEffective, source: 'default', persisted: true },
   updatePrompt: { prompt: null, effective_prompt: defaultEffective, source: 'default', persisted: true },
+  graphPrompt: { prompt: null, effective_prompt: defaultEffective, source: 'default', persisted: false },
 };
 
 const promptsCustom: FoxmemoryPromptsResponse = {
   ok: true,
   extractionPrompt: { prompt: 'Extract only factual preferences, habits, and goals from the user. Ignore assistant messages.', effective_prompt: 'Extract only factual preferences, habits, and goals from the user. Ignore assistant messages.', source: 'persisted', persisted: true },
   updatePrompt: { prompt: null, effective_prompt: defaultEffective, source: 'default', persisted: true },
+  graphPrompt: { prompt: null, effective_prompt: defaultEffective, source: 'default', persisted: false },
 };
 
 const noop = async () => {};
 
 export const DefaultPrompts: Story = {
-  args: { foxmemory, prompts: promptsDefault, promptsLoading: false, onSaveExtractionPrompt: noop, onSaveUpdatePrompt: noop },
+  args: { foxmemory, prompts: promptsDefault, promptsLoading: false, onSaveExtractionPrompt: noop, onSaveUpdatePrompt: noop, onSaveGraphPrompt: noop },
 };
 
 export const CustomExtractionPrompt: Story = {
-  args: { foxmemory, prompts: promptsCustom, promptsLoading: false, onSaveExtractionPrompt: noop, onSaveUpdatePrompt: noop },
+  args: { foxmemory, prompts: promptsCustom, promptsLoading: false, onSaveExtractionPrompt: noop, onSaveUpdatePrompt: noop, onSaveGraphPrompt: noop },
 };
 
 export const Loading: Story = {
-  args: { foxmemory, prompts: undefined, promptsLoading: true, onSaveExtractionPrompt: noop, onSaveUpdatePrompt: noop },
+  args: { foxmemory, prompts: undefined, promptsLoading: true, onSaveExtractionPrompt: noop, onSaveUpdatePrompt: noop, onSaveGraphPrompt: noop },
 };

@@ -5,7 +5,7 @@ import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import MemoryRoundedIcon from '@mui/icons-material/MemoryRounded';
 import TimelineRoundedIcon from '@mui/icons-material/TimelineRounded';
 import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip as ReTooltip, XAxis, YAxis } from 'recharts';
-import type { TooltipProps } from 'recharts';
+import type { TooltipContentProps } from 'recharts';
 import StatCard from '../StatCard/StatCard';
 import FoxMemoryAgentsView from '../FoxMemoryAgentsView/FoxMemoryAgentsView';
 import FoxMemoryGraphView from '../FoxMemoryGraphView/FoxMemoryGraphView';
@@ -30,7 +30,7 @@ type SubView = 'performance' | 'agents' | 'graph';
 
 const EVENT_COLORS: Record<string, string> = { ADD: '#2dce89', UPDATE: '#5e72e4', DELETE: '#f5365c', NONE: '#adb5bd' };
 
-const PillTooltip = ({ active, payload, label }: TooltipProps<number, string>) => {
+const PillTooltip = ({ active, payload, label }: TooltipContentProps<number, string>) => {
   if (!active || !payload?.length) return null;
   const { name, value, color } = payload[0];
   return (
@@ -153,7 +153,7 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
                           <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
                           <XAxis dataKey="date" tick={{ fontSize: 10 }} />
                           <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={28} />
-                          <ReTooltip cursor={false} content={<PillTooltip />} isAnimationActive={false} />
+                          <ReTooltip cursor={false} content={PillTooltip} isAnimationActive={false} />
                           <Bar dataKey={event} fill={EVENT_COLORS[event]} radius={[3, 3, 0, 0]} activeBar={false} />
                         </BarChart>
                       </ResponsiveContainer>
@@ -242,7 +242,7 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
                           <Cell fill="#5e72e4" />
                           <Cell fill="#11cdef" />
                         </Pie>
-                        <ReTooltip content={<PillTooltip />} isAnimationActive={false} />
+                        <ReTooltip content={PillTooltip} isAnimationActive={false} />
                       </PieChart>
                     </ResponsiveContainer>
                   </Box>

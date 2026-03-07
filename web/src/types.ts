@@ -104,6 +104,23 @@ export interface FoxmemoryGraphStats {
   mostConnected: Array<{ id: string; name: string; degree: number }>;
 }
 
+export interface FoxmemoryGraphNode {
+  id: string;
+  name: string;
+  degree: number;
+}
+
+export interface FoxmemoryGraphLink {
+  source: string;
+  target: string;
+  label: string;
+}
+
+export interface FoxmemoryGraphData {
+  nodes: FoxmemoryGraphNode[];
+  links: FoxmemoryGraphLink[];
+}
+
 export interface FoxmemoryResponse {
   ok: boolean;
   baseUrl: string;

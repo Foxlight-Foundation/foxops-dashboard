@@ -375,6 +375,33 @@ app.get('/api/foxmemory/graph-stats', async (_req: Request, res: Response) => {
   }
 });
 
+app.get('/api/foxmemory/graph-data', async (_req: Request, res: Response) => {
+  try {
+    const upstream = await fetch(
+      `${foxmemoryBaseUrl}/v2/graph/relations?user_id=${encodeURIComponent(foxmemoryUserId)}&limit=500`
+    );
+    if (!upstream.ok) return res.status(upstream.status).json({ ok: false, error: 'upstream error' });
+    const json = (await upstream.json()) as {
+      data?: { relations?: Array<{ source: string; relationship: string; target: string }> };
+    };
+    const relations = json?.data?.relations ?? [];
+
+    // Derive nodes + degree from unique source/target values
+    const degreeMap = new Map<string, number>();
+    for (const r of relations) {
+      degreeMap.set(r.source, (degreeMap.get(r.source) ?? 0) + 1);
+      degreeMap.set(r.target, (degreeMap.get(r.target) ?? 0) + 1);
+    }
+
+    const nodes = Array.from(degreeMap.entries()).map(([id, degree]) => ({ id, name: id, degree }));
+    const links = relations.map((r) => ({ source: r.source, target: r.target, label: r.relationship }));
+
+    return res.json({ ok: true, data: { nodes, links } });
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.get('/api/foxmemory/overview', async (_req: Request, res: Response) => {
   try {
     const overview = await probeFoxmemory();

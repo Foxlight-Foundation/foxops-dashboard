@@ -24,6 +24,7 @@
     "@reduxjs/toolkit": "^2.11.2",
     "cors": "^2.8.5",
     "express": "^4.19.2",
+    "react-force-graph-2d": "^1.29.1",
     "react-redux": "^9.2.0",
     "recharts": "^3.7.0",
     "redux-persist": "^6.0.0"

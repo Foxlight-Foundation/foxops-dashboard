@@ -1,11 +1,14 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
 import { Box, Card, CardContent, Chip, CircularProgress, Grid, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import DeviceHubRoundedIcon from '@mui/icons-material/DeviceHubRounded';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as ReTooltip } from 'recharts';
-import type { TooltipProps } from 'recharts';
+import type { TooltipContentProps } from 'recharts';
+import ForceGraph2D from 'react-force-graph-2d';
 import StatCard from '../StatCard/StatCard';
 import { grad } from '../shared/styled';
+import { useGetFoxmemoryGraphDataQuery } from '../../services/dashboardApi';
+import type { FoxmemoryGraphNode, FoxmemoryGraphLink } from '../../types';
 import type { FoxMemoryGraphViewProps } from './FoxMemoryGraphView.types';
 
 const LABEL_COLORS: Record<string, string> = {
@@ -34,10 +37,20 @@ const labelColor = (label: string) => LABEL_COLORS[label.toLowerCase()] ?? '#adb
 
 const PIE_COLORS = ['#5e72e4', '#2dce89', '#11cdef', '#fb6340', '#825ee4', '#f5365c', '#ffd600', '#2dbd5a', '#11b4ef', '#e91e63'];
 
-const PillTooltip = ({ active, payload }: TooltipProps<number, string>) => {
+const NODE_COLORS = ['#5e72e4', '#2dce89', '#11cdef', '#fb6340', '#825ee4', '#f5365c', '#ffd600', '#2dbd5a', '#11b4ef', '#e91e63'];
+
+const hashNodeColor = (name: string) => {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
+  return NODE_COLORS[Math.abs(h) % NODE_COLORS.length];
+};
+
+const PillTooltip = ({ active, payload }: TooltipContentProps<number, string>) => {
   if (!active || !payload?.length) return null;
-  const { name, value, payload: entry } = payload[0];
-  const color = entry?.fill as string;
+  const item = payload[0];
+  const name = item.name;
+  const value = item.value;
+  const color = (item as unknown as { payload?: { fill?: string } }).payload?.fill as string | undefined;
   return (
     <Box sx={{ bgcolor: 'rgba(15,17,26,0.92)', border: '1px solid rgba(255,255,255,0.08)', color: '#fff', px: 1.5, py: 0.5, borderRadius: 10, fontSize: 11, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.75, pointerEvents: 'none' }}>
       {color && <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color, flexShrink: 0 }} />}
@@ -49,6 +62,155 @@ const PillTooltip = ({ active, payload }: TooltipProps<number, string>) => {
 };
 
 type GraphSubView = 'performance' | 'explorer';
+
+// ── Explorer ─────────────────────────────────────────────────────────────────
+
+type RawNode = FoxmemoryGraphNode & { x?: number; y?: number; vx?: number; vy?: number };
+type RawLink = { source: string | RawNode; target: string | RawNode; label: string };
+
+
+const GraphExplorer = () => {
+  const { data, isLoading } = useGetFoxmemoryGraphDataQuery();
+  const [selectedNode, setSelectedNode] = useState<FoxmemoryGraphNode | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(600);
+  const [height, setHeight] = useState(520);
+
+  const measureSize = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    setWidth(el.offsetWidth);
+    const top = el.getBoundingClientRect().top;
+    setHeight(Math.max(300, Math.floor(window.innerHeight - top - 24)));
+  }, []);
+
+  useLayoutEffect(() => {
+    measureSize();
+    const obs = new ResizeObserver(measureSize);
+    if (containerRef.current) obs.observe(containerRef.current);
+    window.addEventListener('resize', measureSize);
+    return () => { obs.disconnect(); window.removeEventListener('resize', measureSize); };
+  }, [measureSize]);
+
+  const graphData = useMemo(() => {
+    const raw = data?.data;
+    if (!raw) return { nodes: [], links: [] };
+    return {
+      nodes: raw.nodes.map((n) => ({ ...n })) as RawNode[],
+      links: raw.links.map((l) => ({ ...l })) as RawLink[],
+    };
+  }, [data]);
+
+  const selectedLinks = useMemo<FoxmemoryGraphLink[]>(() => {
+    if (!selectedNode || !data?.data) return [];
+    return data.data.links.filter(
+      (l) => l.source === selectedNode.id || l.target === selectedNode.id
+    );
+  }, [selectedNode, data]);
+
+  const handleNodeClick = useCallback((node: object) => {
+    const n = node as RawNode;
+    setSelectedNode((prev) => (prev?.id === n.id ? null : { id: n.id, name: n.name, degree: n.degree }));
+  }, []);
+
+  const nodeColor = useCallback((node: object) => {
+    const n = node as RawNode;
+    return hashNodeColor(n.name);
+  }, []);
+
+  const nodeLabel = useCallback((node: object) => {
+    const n = node as RawNode;
+    return `${n.name} · ${n.degree} connections`;
+  }, []);
+
+  const nodeVal = useCallback((node: object) => {
+    const n = node as RawNode;
+    return Math.max(1, Math.log(n.degree + 1) * 3);
+  }, []);
+
+  if (isLoading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+        <CircularProgress size={32} />
+      </Box>
+    );
+  }
+
+  if (!data?.data?.nodes.length) {
+    return (
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 8 }}>
+        <Typography variant="body2" color="text.secondary">No graph data available.</Typography>
+      </Box>
+    );
+  }
+
+  return (
+    <Box>
+      <Card sx={{ borderRadius: 1, overflow: 'hidden' }}>
+        <Box ref={containerRef} sx={{ width: '100%', cursor: 'grab', '&:active': { cursor: 'grabbing' }, lineHeight: 0 }}>
+          <ForceGraph2D
+            graphData={graphData}
+            width={width}
+            height={height}
+            nodeColor={nodeColor}
+            nodeLabel={nodeLabel}
+            nodeVal={nodeVal}
+            linkColor={() => 'rgba(100,110,140,0.4)'}
+            linkDirectionalArrowLength={3}
+            linkDirectionalArrowRelPos={1}
+            onNodeClick={handleNodeClick}
+            nodeCanvasObjectMode={() => 'after'}
+            nodeCanvasObject={(node, ctx, globalScale) => {
+              const n = node as RawNode;
+              if (globalScale < 1.5) return;
+              const label = n.name.length > 20 ? n.name.slice(0, 18) + '…' : n.name;
+              const fontSize = 10 / globalScale;
+              ctx.font = `${fontSize}px monospace`;
+              ctx.textAlign = 'center';
+              ctx.textBaseline = 'top';
+              ctx.fillStyle = 'rgba(30,30,50,0.75)';
+              ctx.fillText(label, n.x ?? 0, (n.y ?? 0) + 5);
+            }}
+            cooldownTicks={120}
+            d3AlphaDecay={0.02}
+            d3VelocityDecay={0.3}
+          />
+        </Box>
+      </Card>
+
+      {selectedNode && (
+        <Card sx={{ borderRadius: 1, mt: 1.5 }}>
+          <CardContent sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: hashNodeColor(selectedNode.name), flexShrink: 0 }} />
+              <Typography variant="subtitle2" fontWeight={700} sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                {selectedNode.name}
+              </Typography>
+              <Chip label={`${selectedNode.degree} connections`} size="small" sx={{ ml: 'auto', fontSize: 11 }} />
+            </Box>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+              {selectedLinks.map((l, i) => {
+                const isSource = l.source === selectedNode.id;
+                return (
+                  <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: 'rgba(255,255,255,0.04)', borderRadius: 1, px: 1, py: 0.25 }}>
+                    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: 10, color: 'text.secondary', opacity: isSource ? 0.5 : 1 }}>
+                      {isSource ? l.target : l.source}
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontSize: 10, color: '#5e72e4', fontStyle: 'italic' }}>
+                      {isSource ? `→ ${l.label}` : `← ${l.label}`}
+                    </Typography>
+                  </Box>
+                );
+              })}
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+    </Box>
+  );
+};
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 const FoxMemoryGraphView = ({ stats, diagnostics, loading }: FoxMemoryGraphViewProps) => {
   const [subView, setSubView] = useState<GraphSubView>('performance');
@@ -108,9 +270,7 @@ const FoxMemoryGraphView = ({ stats, diagnostics, loading }: FoxMemoryGraphViewP
       </Box>
 
       {subView === 'explorer' ? (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 8 }}>
-          <Typography variant="body2" color="text.secondary">Graph explorer coming soon.</Typography>
-        </Box>
+        <GraphExplorer />
       ) : (
       <>
       <Grid container spacing={1.5} mb={2.5}>
@@ -196,7 +356,7 @@ const FoxMemoryGraphView = ({ stats, diagnostics, loading }: FoxMemoryGraphViewP
                         <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                       ))}
                     </Pie>
-                    <ReTooltip content={<PillTooltip />} isAnimationActive={false} />
+                    <ReTooltip content={PillTooltip} isAnimationActive={false} />
                   </PieChart>
                 </ResponsiveContainer>
               </Box>

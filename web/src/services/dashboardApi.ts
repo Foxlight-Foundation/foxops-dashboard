@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { SessionsResponse, FoxmemoryResponse, FoxmemoryPromptsResponse, FoxmemoryGraphStats, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse, CronJobsResponse } from '../types';
+import type { SessionsResponse, FoxmemoryResponse, FoxmemoryPromptsResponse, FoxmemoryGraphStats, FoxmemoryGraphData, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse, CronJobsResponse } from '../types';
 
 export const dashboardApi = createApi({
   reducerPath: 'dashboardApi',
@@ -20,6 +20,10 @@ export const dashboardApi = createApi({
     }),
     getFoxmemoryGraphStats: builder.query<{ ok: boolean; data: FoxmemoryGraphStats }, void>({
       query: () => '/foxmemory/graph-stats',
+      providesTags: ['FoxmemoryGraph'],
+    }),
+    getFoxmemoryGraphData: builder.query<{ ok: boolean; data: FoxmemoryGraphData }, void>({
+      query: () => '/foxmemory/graph-data',
       providesTags: ['FoxmemoryGraph'],
     }),
     setFoxmemoryExtractionPrompt: builder.mutation<{ ok: boolean }, { prompt: string | null }>({
@@ -62,6 +66,7 @@ export const {
   useGetFoxmemoryOverviewQuery,
   useGetFoxmemoryPromptsQuery,
   useGetFoxmemoryGraphStatsQuery,
+  useGetFoxmemoryGraphDataQuery,
   useSetFoxmemoryExtractionPromptMutation,
   useSetFoxmemoryUpdatePromptMutation,
   useSetFoxmemoryGraphPromptMutation,
