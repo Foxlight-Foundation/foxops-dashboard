@@ -44,7 +44,7 @@ const App = () => {
     error: sessionsError,
     refetch: refetchSessions,
     fulfilledTimeStamp: sessionsFulfilledAt,
-  } = useGetSessionsQuery(undefined, { pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnReconnect: true });
+  } = useGetSessionsQuery(undefined, { skip: section !== 'acp', pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnReconnect: true });
 
   const {
     data: foxmemory,
@@ -53,14 +53,14 @@ const App = () => {
     error: foxError,
     refetch: refetchFox,
     fulfilledTimeStamp: foxFulfilledAt,
-  } = useGetFoxmemoryOverviewQuery(undefined, { pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnReconnect: true });
+  } = useGetFoxmemoryOverviewQuery(undefined, { skip: section !== 'foxmemory', pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnReconnect: true });
 
   const {
     data: cronsData,
     isFetching: cronsFetching,
     refetch: refetchCrons,
     fulfilledTimeStamp: cronsFulfilledAt,
-  } = useGetCronsQuery(undefined, { pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnReconnect: true });
+  } = useGetCronsQuery(undefined, { skip: section !== 'cron', pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnReconnect: true });
 
   const [killSession, { isLoading: killLoading }] = useKillSessionMutation();
   const [deleteSession, { isLoading: deleteLoading }] = useDeleteSessionMutation();

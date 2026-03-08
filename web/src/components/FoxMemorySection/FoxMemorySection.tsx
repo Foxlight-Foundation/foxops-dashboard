@@ -57,6 +57,8 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
   });
   const { data: graphStatsData, isFetching: graphStatsLoading } = useGetFoxmemoryGraphStatsQuery(undefined, {
     skip: subView !== 'graph',
+    pollingInterval: 15000,
+    skipPollingIfUnfocused: true,
   });
   const [saveExtractionPrompt] = useSetFoxmemoryExtractionPromptMutation();
   const [saveUpdatePrompt] = useSetFoxmemoryUpdatePromptMutation();
