@@ -67,7 +67,7 @@ const PromptEditor = ({
           fullWidth
           minRows={5}
           maxRows={18}
-          value={editing ? value : (effectivePrompt ?? '')}
+          value={editing ? value : (effectivePrompt ?? currentPrompt ?? '')}
           onChange={(e) => setValue(e.target.value)}
           disabled={!editing}
           size="small"
