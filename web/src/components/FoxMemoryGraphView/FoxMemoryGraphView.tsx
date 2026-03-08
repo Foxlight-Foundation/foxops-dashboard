@@ -37,12 +37,17 @@ const labelColor = (label: string) => LABEL_COLORS[label.toLowerCase()] ?? '#adb
 
 const PIE_COLORS = ['#5e72e4', '#2dce89', '#11cdef', '#fb6340', '#825ee4', '#f5365c', '#ffd600', '#2dbd5a', '#11b4ef', '#e91e63'];
 
-const NODE_COLORS = ['#5e72e4', '#2dce89', '#11cdef', '#fb6340', '#825ee4', '#f5365c', '#ffd600', '#2dbd5a', '#11b4ef', '#e91e63'];
-
+// Lerp through #281EE6 → #3E6BE6 → #5CACE6
 const hashNodeColor = (name: string) => {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
-  return NODE_COLORS[Math.abs(h) % NODE_COLORS.length];
+  const t = (Math.abs(h) % 1000) / 999;
+  const stops = [[0x28, 0x1e, 0xe6], [0x3e, 0x6b, 0xe6], [0x5c, 0xac, 0xe6]] as const;
+  const seg = t < 0.5 ? 0 : 1;
+  const st = seg === 0 ? t * 2 : (t - 0.5) * 2;
+  const [r1, g1, b1] = stops[seg];
+  const [r2, g2, b2] = stops[seg + 1];
+  return `rgb(${Math.round(r1 + (r2 - r1) * st)},${Math.round(g1 + (g2 - g1) * st)},${Math.round(b1 + (b2 - b1) * st)})`;
 };
 
 const PillTooltip = ({ active, payload }: TooltipContentProps<number, string>) => {
@@ -73,6 +78,7 @@ const GraphExplorer = () => {
   const { data, isLoading } = useGetFoxmemoryGraphDataQuery();
   const [selectedNode, setSelectedNode] = useState<FoxmemoryGraphNode | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(600);
   const [height, setHeight] = useState(520);
 
@@ -90,7 +96,18 @@ const GraphExplorer = () => {
     if (containerRef.current) obs.observe(containerRef.current);
     window.addEventListener('resize', measureSize);
     return () => { obs.disconnect(); window.removeEventListener('resize', measureSize); };
-  }, [measureSize]);
+  }, [measureSize, data]);
+
+  useEffect(() => {
+    if (!selectedNode) return;
+    const handler = (e: MouseEvent) => {
+      if (detailRef.current && !detailRef.current.contains(e.target as Node)) {
+        setSelectedNode(null);
+      }
+    };
+    document.addEventListener('mousedown', handler, true);
+    return () => document.removeEventListener('mousedown', handler, true);
+  }, [selectedNode]);
 
   const graphData = useMemo(() => {
     const raw = data?.data;
@@ -145,7 +162,7 @@ const GraphExplorer = () => {
   }
 
   return (
-    <Box>
+    <Box sx={{ position: 'relative' }}>
       <Card sx={{ borderRadius: 1, overflow: 'hidden' }}>
         <Box ref={containerRef} sx={{ width: '100%', cursor: 'grab', '&:active': { cursor: 'grabbing' }, lineHeight: 0 }}>
           <ForceGraph2D
@@ -159,17 +176,30 @@ const GraphExplorer = () => {
             linkDirectionalArrowLength={3}
             linkDirectionalArrowRelPos={1}
             onNodeClick={handleNodeClick}
+            onBackgroundClick={() => setSelectedNode(null)}
             nodeCanvasObjectMode={() => 'after'}
             nodeCanvasObject={(node, ctx, globalScale) => {
               const n = node as RawNode;
               if (globalScale < 1.5) return;
               const label = n.name.length > 20 ? n.name.slice(0, 18) + '…' : n.name;
-              const fontSize = 10 / globalScale;
+              const fontSize = 11 / globalScale;
               ctx.font = `${fontSize}px monospace`;
+              const textW = ctx.measureText(label).width;
+              const padX = 4 / globalScale;
+              const padY = 2 / globalScale;
+              const pillW = textW + padX * 2;
+              const pillH = fontSize + padY * 2;
+              const r = pillH / 2;
+              const x = (n.x ?? 0) - pillW / 2;
+              const y = (n.y ?? 0) + 5 / globalScale;
+              ctx.fillStyle = 'rgba(255,255,255,0.70)';
+              ctx.beginPath();
+              ctx.roundRect(x, y, pillW, pillH, r);
+              ctx.fill();
+              ctx.fillStyle = 'rgba(30,30,50,1)';
               ctx.textAlign = 'center';
               ctx.textBaseline = 'top';
-              ctx.fillStyle = 'rgba(30,30,50,0.75)';
-              ctx.fillText(label, n.x ?? 0, (n.y ?? 0) + 5);
+              ctx.fillText(label, n.x ?? 0, y + padY);
             }}
             cooldownTicks={120}
             d3AlphaDecay={0.02}
@@ -179,32 +209,46 @@ const GraphExplorer = () => {
       </Card>
 
       {selectedNode && (
-        <Card sx={{ borderRadius: 1, mt: 1.5 }}>
-          <CardContent sx={{ p: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: hashNodeColor(selectedNode.name), flexShrink: 0 }} />
-              <Typography variant="subtitle2" fontWeight={700} sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                {selectedNode.name}
-              </Typography>
-              <Chip label={`${selectedNode.degree} connections`} size="small" sx={{ ml: 'auto', fontSize: 11 }} />
-            </Box>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-              {selectedLinks.map((l, i) => {
-                const isSource = l.source === selectedNode.id;
-                return (
-                  <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: 'rgba(255,255,255,0.04)', borderRadius: 1, px: 1, py: 0.25 }}>
-                    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: 10, color: 'text.secondary', opacity: isSource ? 0.5 : 1 }}>
-                      {isSource ? l.target : l.source}
-                    </Typography>
-                    <Typography variant="caption" sx={{ fontSize: 10, color: '#5e72e4', fontStyle: 'italic' }}>
-                      {isSource ? `→ ${l.label}` : `← ${l.label}`}
-                    </Typography>
-                  </Box>
-                );
-              })}
-            </Box>
-          </CardContent>
-        </Card>
+        <Box
+          ref={detailRef}
+          sx={{
+            position: 'absolute',
+            top: 12,
+            left: 12,
+            right: 12,
+            zIndex: 10,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.22)',
+            borderRadius: 1,
+            overflow: 'hidden',
+          }}
+        >
+          <Card sx={{ borderRadius: 1, background: 'rgba(255,255,255,0.79)', backdropFilter: 'blur(21px)', border: '1px solid rgba(255,255,255,0.5)' }}>
+            <CardContent sx={{ p: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: hashNodeColor(selectedNode.name), flexShrink: 0 }} />
+                <Typography variant="subtitle2" fontWeight={700} sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                  {selectedNode.name}
+                </Typography>
+                <Chip label={`${selectedNode.degree} connections`} size="small" sx={{ ml: 'auto', fontSize: 11 }} />
+              </Box>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, maxHeight: 160, overflowY: 'auto' }}>
+                {selectedLinks.map((l, i) => {
+                  const isSource = l.source === selectedNode.id;
+                  return (
+                    <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: 'rgba(0,0,0,0.04)', borderRadius: 1, px: 1, py: 0.25 }}>
+                      <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: 'text.secondary', opacity: isSource ? 0.70 : 1 }}>
+                        {isSource ? l.target : l.source}
+                      </Typography>
+                      <Typography variant="caption" sx={{ fontSize: 11, color: '#5e72e4', fontStyle: 'italic' }}>
+                        {isSource ? `→ ${l.label}` : `← ${l.label}`}
+                      </Typography>
+                    </Box>
+                  );
+                })}
+              </Box>
+            </CardContent>
+          </Card>
+        </Box>
       )}
     </Box>
   );
