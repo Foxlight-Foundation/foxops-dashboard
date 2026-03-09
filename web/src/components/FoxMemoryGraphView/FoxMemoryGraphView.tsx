@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
-import { Box, Card, CardContent, Chip, CircularProgress, Grid, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Box, Card, CardContent, Chip, CircularProgress, FormControl, Grid, MenuItem, Select, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import DeviceHubRoundedIcon from '@mui/icons-material/DeviceHubRounded';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as ReTooltip } from 'recharts';
@@ -74,7 +74,16 @@ type RawNode = FoxmemoryGraphNode & { x?: number; y?: number; vx?: number; vy?: 
 type RawLink = { source: string | RawNode; target: string | RawNode; label: string };
 
 
-const GraphExplorer = () => {
+const MIN_DEGREE_OPTIONS = [
+  { value: 0, label: 'All nodes' },
+  { value: 1, label: '1+ connections' },
+  { value: 2, label: '2+ connections' },
+  { value: 3, label: '3+ connections' },
+  { value: 5, label: '5+ connections' },
+  { value: 10, label: '10+ connections' },
+];
+
+const GraphExplorer = ({ minDegree }: { minDegree: number }) => {
   const { data, isLoading } = useGetFoxmemoryGraphDataQuery();
   const [selectedNode, setSelectedNode] = useState<FoxmemoryGraphNode | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -112,11 +121,12 @@ const GraphExplorer = () => {
   const graphData = useMemo(() => {
     const raw = data?.data;
     if (!raw) return { nodes: [], links: [] };
+    const keep = new Set(raw.nodes.filter((n) => n.degree >= minDegree).map((n) => n.id));
     return {
-      nodes: raw.nodes.map((n) => ({ ...n })) as RawNode[],
-      links: raw.links.map((l) => ({ ...l })) as RawLink[],
+      nodes: raw.nodes.filter((n) => keep.has(n.id)).map((n) => ({ ...n })) as RawNode[],
+      links: raw.links.filter((l) => keep.has(l.source) && keep.has(l.target)).map((l) => ({ ...l })) as RawLink[],
     };
-  }, [data]);
+  }, [data, minDegree]);
 
   const selectedLinks = useMemo<FoxmemoryGraphLink[]>(() => {
     if (!selectedNode || !data?.data) return [];
@@ -258,6 +268,7 @@ const GraphExplorer = () => {
 
 const FoxMemoryGraphView = ({ stats, diagnostics, loading }: FoxMemoryGraphViewProps) => {
   const [subView, setSubView] = useState<GraphSubView>('performance');
+  const [minDegree, setMinDegree] = useState(1);
 
   if (loading && !stats) {
     return (
@@ -274,7 +285,31 @@ const FoxMemoryGraphView = ({ stats, diagnostics, loading }: FoxMemoryGraphViewP
 
   return (
     <>
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2.5 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2.5 }}>
+        {subView === 'explorer' ? (
+          <FormControl size="small">
+            <Select
+              value={minDegree}
+              onChange={(e) => setMinDegree(Number(e.target.value))}
+              sx={{
+                fontSize: 12,
+                fontWeight: 600,
+                background: 'linear-gradient(45deg, #1a3fc4 0%, #6690f5 100%)',
+                color: '#fff',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.18), 0 4px 16px rgba(0,0,0,0.12)',
+                borderRadius: '8px',
+                '& .MuiOutlinedInput-notchedOutline': { border: 'none' },
+                '& .MuiSvgIcon-root': { color: 'rgba(255,255,255,0.8)' },
+                '&:hover': { background: 'linear-gradient(45deg, #1a3fc4 0%, #6690f5 100%)' },
+                '& .MuiSelect-select': { py: '6px', px: '14px' },
+              }}
+            >
+              {MIN_DEGREE_OPTIONS.map((o) => (
+                <MenuItem key={o.value} value={o.value} sx={{ fontSize: 12 }}>{o.label}</MenuItem>
+              ))}
+            </Select>
+          </FormControl>
+        ) : <Box />}
         <ToggleButtonGroup
           exclusive
           size="small"
@@ -313,8 +348,9 @@ const FoxMemoryGraphView = ({ stats, diagnostics, loading }: FoxMemoryGraphViewP
         </ToggleButtonGroup>
       </Box>
 
+
       {subView === 'explorer' ? (
-        <GraphExplorer />
+        <GraphExplorer minDegree={minDegree} />
       ) : (
       <>
       <Grid container spacing={1.5} mb={2.5}>
