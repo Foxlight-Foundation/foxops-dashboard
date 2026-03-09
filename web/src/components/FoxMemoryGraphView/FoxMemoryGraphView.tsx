@@ -7,7 +7,7 @@ import type { TooltipContentProps } from 'recharts';
 import ForceGraph2D from 'react-force-graph-2d';
 import StatCard from '../StatCard/StatCard';
 import { grad } from '../shared/styled';
-import { useGetFoxmemoryGraphDataQuery } from '../../services/dashboardApi';
+import { useGetFoxmemoryGraphDataQuery, useSearchFoxmemoryGraphMutation, useSearchFoxmemoryMemoriesMutation } from '../../services/dashboardApi';
 import type { FoxmemoryGraphNode, FoxmemoryGraphLink } from '../../types';
 import type { FoxMemoryGraphViewProps } from './FoxMemoryGraphView.types';
 
@@ -38,7 +38,7 @@ const labelColor = (label: string) => LABEL_COLORS[label.toLowerCase()] ?? '#adb
 const PIE_COLORS = ['#5e72e4', '#2dce89', '#11cdef', '#fb6340', '#825ee4', '#f5365c', '#ffd600', '#2dbd5a', '#11b4ef', '#e91e63'];
 
 // Lerp through #281EE6 → #3E6BE6 → #5CACE6
-const hashNodeColor = (name: string) => {
+const hashNodeRgb = (name: string): [number, number, number] => {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (Math.imul(31, h) + name.charCodeAt(i)) | 0;
   const t = (Math.abs(h) % 1000) / 999;
@@ -47,7 +47,11 @@ const hashNodeColor = (name: string) => {
   const st = seg === 0 ? t * 2 : (t - 0.5) * 2;
   const [r1, g1, b1] = stops[seg];
   const [r2, g2, b2] = stops[seg + 1];
-  return `rgb(${Math.round(r1 + (r2 - r1) * st)},${Math.round(g1 + (g2 - g1) * st)},${Math.round(b1 + (b2 - b1) * st)})`;
+  return [Math.round(r1 + (r2 - r1) * st), Math.round(g1 + (g2 - g1) * st), Math.round(b1 + (b2 - b1) * st)];
+};
+const hashNodeColor = (name: string, alpha = 1) => {
+  const [r, g, b] = hashNodeRgb(name);
+  return alpha < 1 ? `rgba(${r},${g},${b},${alpha})` : `rgb(${r},${g},${b})`;
 };
 
 const PillTooltip = ({ active, payload }: TooltipContentProps<number, string>) => {
@@ -68,6 +72,9 @@ const PillTooltip = ({ active, payload }: TooltipContentProps<number, string>) =
 
 type GraphSubView = 'performance' | 'explorer';
 
+// Neo4j stores timestamps as int64 split into {low, high} (milliseconds)
+const neo4jToMs = (c: { low: number; high: number }) => c.high * 4294967296 + (c.low >>> 0);
+
 // ── Explorer ─────────────────────────────────────────────────────────────────
 
 type RawNode = FoxmemoryGraphNode & { x?: number; y?: number; vx?: number; vy?: number };
@@ -83,9 +90,14 @@ const MIN_DEGREE_OPTIONS = [
   { value: 10, label: '10+ connections' },
 ];
 
+type PanelTab = 'connections' | 'details';
+
 const GraphExplorer = ({ minDegree }: { minDegree: number }) => {
   const { data, isLoading } = useGetFoxmemoryGraphDataQuery();
+  const [searchGraph, { data: richData, isLoading: richLoading, reset: resetRich }] = useSearchFoxmemoryGraphMutation();
+  const [searchMemories, { data: memoriesData, isLoading: memoriesLoading, reset: resetMemories }] = useSearchFoxmemoryMemoriesMutation();
   const [selectedNode, setSelectedNode] = useState<FoxmemoryGraphNode | null>(null);
+  const [panelTab, setPanelTab] = useState<PanelTab>('connections');
   const containerRef = useRef<HTMLDivElement>(null);
   const detailRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(600);
@@ -112,6 +124,8 @@ const GraphExplorer = ({ minDegree }: { minDegree: number }) => {
     const handler = (e: MouseEvent) => {
       if (detailRef.current && !detailRef.current.contains(e.target as Node)) {
         setSelectedNode(null);
+        resetRich();
+        resetMemories();
       }
     };
     document.addEventListener('mousedown', handler, true);
@@ -135,15 +149,29 @@ const GraphExplorer = ({ minDegree }: { minDegree: number }) => {
     );
   }, [selectedNode, data]);
 
+  const connectedIds = useMemo(() => {
+    if (!selectedNode) return null;
+    const ids = new Set<string>([selectedNode.id]);
+    selectedLinks.forEach((l) => { ids.add(l.source); ids.add(l.target); });
+    return ids;
+  }, [selectedNode, selectedLinks]);
+
   const handleNodeClick = useCallback((node: object) => {
     const n = node as RawNode;
-    setSelectedNode((prev) => (prev?.id === n.id ? null : { id: n.id, name: n.name, degree: n.degree }));
-  }, []);
+    setSelectedNode((prev) => {
+      if (prev?.id === n.id) { resetRich(); resetMemories(); return null; }
+      searchGraph({ query: n.name });
+      searchMemories({ query: n.name, top_k: 8 });
+      setPanelTab('connections');
+      return { id: n.id, name: n.name, degree: n.degree };
+    });
+  }, [searchGraph, resetRich, searchMemories, resetMemories]);
 
   const nodeColor = useCallback((node: object) => {
     const n = node as RawNode;
-    return hashNodeColor(n.name);
-  }, []);
+    const dimmed = connectedIds !== null && !connectedIds.has(n.id);
+    return hashNodeColor(n.name, dimmed ? 0.15 : 1);
+  }, [connectedIds]);
 
   const nodeLabel = useCallback((node: object) => {
     const n = node as RawNode;
@@ -182,11 +210,19 @@ const GraphExplorer = ({ minDegree }: { minDegree: number }) => {
             nodeColor={nodeColor}
             nodeLabel={nodeLabel}
             nodeVal={nodeVal}
-            linkColor={() => 'rgba(100,110,140,0.4)'}
+            linkColor={(link) => {
+              if (!connectedIds) return 'rgba(100,110,140,0.4)';
+              const l = link as RawLink;
+              const src = typeof l.source === 'string' ? l.source : l.source.id;
+              const tgt = typeof l.target === 'string' ? l.target : l.target.id;
+              return connectedIds.has(src) && connectedIds.has(tgt)
+                ? 'rgba(100,110,140,0.7)'
+                : 'rgba(100,110,140,0.08)';
+            }}
             linkDirectionalArrowLength={3}
             linkDirectionalArrowRelPos={1}
             onNodeClick={handleNodeClick}
-            onBackgroundClick={() => setSelectedNode(null)}
+            onBackgroundClick={() => { setSelectedNode(null); resetRich(); resetMemories(); }}
             nodeCanvasObjectMode={() => 'after'}
             nodeCanvasObject={(node, ctx, globalScale) => {
               const n = node as RawNode;
@@ -218,48 +254,118 @@ const GraphExplorer = ({ minDegree }: { minDegree: number }) => {
         </Box>
       </Card>
 
-      {selectedNode && (
-        <Box
-          ref={detailRef}
-          sx={{
-            position: 'absolute',
-            top: 12,
-            left: 12,
-            right: 12,
-            zIndex: 10,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.22)',
-            borderRadius: 1,
-            overflow: 'hidden',
-          }}
-        >
-          <Card sx={{ borderRadius: 1, background: 'rgba(255,255,255,0.79)', backdropFilter: 'blur(21px)', border: '1px solid rgba(255,255,255,0.5)' }}>
-            <CardContent sx={{ p: 2 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: hashNodeColor(selectedNode.name), flexShrink: 0 }} />
-                <Typography variant="subtitle2" fontWeight={700} sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                  {selectedNode.name}
-                </Typography>
-                <Chip label={`${selectedNode.degree} connections`} size="small" sx={{ ml: 'auto', fontSize: 11 }} />
-              </Box>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, maxHeight: 160, overflowY: 'auto' }}>
-                {selectedLinks.map((l, i) => {
-                  const isSource = l.source === selectedNode.id;
-                  return (
-                    <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: 'rgba(0,0,0,0.04)', borderRadius: 1, px: 1, py: 0.25 }}>
-                      <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: 'text.secondary', opacity: isSource ? 0.70 : 1 }}>
-                        {isSource ? l.target : l.source}
+      {selectedNode && (() => {
+        const richNode = richData?.data?.nodes.find((n) => n.name === selectedNode.name);
+        const richEdges = richData?.data?.edges ?? [];
+        const nameById = new Map(richData?.data?.nodes.map((n) => [n.id, n.name]) ?? []);
+        const createdMs = richNode?.properties?.created ? neo4jToMs(richNode.properties.created) : null;
+        const connections = richEdges.length > 0 ? richEdges : selectedLinks.map((l) => ({
+          id: `${l.source}-${l.target}`,
+          source: l.source,
+          target: l.target,
+          type: l.label,
+          properties: {},
+        }));
+
+        return (
+          <Box
+            ref={detailRef}
+            sx={{ position: 'absolute', top: 12, left: 12, right: 12, zIndex: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.22)', borderRadius: 1, overflow: 'hidden' }}
+          >
+            <Card sx={{ borderRadius: 1, background: 'rgba(255,255,255,0.79)', backdropFilter: 'blur(21px)', border: '1px solid rgba(255,255,255,0.5)' }}>
+              <CardContent sx={{ p: 2 }}>
+                {/* Header */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
+                  <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: hashNodeColor(selectedNode.name), flexShrink: 0 }} />
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                    {selectedNode.name}
+                  </Typography>
+                  {(richLoading || memoriesLoading) && <CircularProgress size={12} sx={{ ml: 0.5 }} />}
+                  {richNode?.labels?.map((lbl) => (
+                    <Chip key={lbl} label={lbl} size="small" sx={{ fontSize: 10, height: 18, bgcolor: `${labelColor(lbl)}22`, color: labelColor(lbl), border: `1px solid ${labelColor(lbl)}44`, fontWeight: 600 }} />
+                  ))}
+                  <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
+                    {createdMs && (
+                      <Typography variant="caption" sx={{ fontSize: 10, color: 'text.secondary', whiteSpace: 'nowrap' }}>
+                        {new Date(createdMs).toLocaleDateString()}
                       </Typography>
-                      <Typography variant="caption" sx={{ fontSize: 11, color: '#5e72e4', fontStyle: 'italic' }}>
-                        {isSource ? `→ ${l.label}` : `← ${l.label}`}
-                      </Typography>
-                    </Box>
-                  );
-                })}
-              </Box>
-            </CardContent>
-          </Card>
-        </Box>
-      )}
+                    )}
+                    <ToggleButtonGroup
+                      exclusive size="small" value={panelTab}
+                      onChange={(_, v: PanelTab | null) => v && setPanelTab(v)}
+                      sx={{ height: 24 }}
+                    >
+                      <ToggleButton value="connections" sx={{ px: 1, py: 0, fontSize: 10, fontWeight: 600, lineHeight: 1 }}>
+                        {selectedNode.degree} connections
+                      </ToggleButton>
+                      <ToggleButton value="details" sx={{ px: 1, py: 0, fontSize: 10, fontWeight: 600, lineHeight: 1 }}>
+                        Details
+                      </ToggleButton>
+                    </ToggleButtonGroup>
+                  </Box>
+                </Box>
+
+                {/* Connections tab */}
+                {panelTab === 'connections' && (
+                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, maxHeight: 160, overflowY: 'auto' }}>
+                    {connections.map((e, i) => {
+                      const isSource = e.source === selectedNode.id || nameById.get(e.source) === selectedNode.name;
+                      const otherName = isSource
+                        ? (nameById.get(e.target) ?? e.target)
+                        : (nameById.get(e.source) ?? e.source);
+                      return (
+                        <Box key={i} sx={{ display: 'flex', alignItems: 'center', gap: 0.5, bgcolor: 'rgba(0,0,0,0.04)', borderRadius: 1, px: 1, py: 0.25 }}>
+                          <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: 11, fontWeight: 600, color: 'text.secondary', opacity: isSource ? 0.7 : 1 }}>
+                            {otherName}
+                          </Typography>
+                          <Typography variant="caption" sx={{ fontSize: 11, color: '#5e72e4', fontStyle: 'italic' }}>
+                            {isSource ? `→ ${e.type}` : `← ${e.type}`}
+                          </Typography>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                )}
+
+                {/* Details tab — vector memories */}
+                {panelTab === 'details' && (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.75, maxHeight: 220, overflowY: 'auto' }}>
+                    {memoriesLoading && (
+                      <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                        <CircularProgress size={20} />
+                      </Box>
+                    )}
+                    {!memoriesLoading && !memoriesData?.data?.results?.length && (
+                      <Typography variant="caption" color="text.secondary" sx={{ py: 1 }}>No memories found.</Typography>
+                    )}
+                    {memoriesData?.data?.results?.map((m) => {
+                      const agentType = m.runId?.split(':')?.[2] ?? m.runId ?? 'unknown';
+                      return (
+                        <Box key={m.id} sx={{ bgcolor: 'rgba(0,0,0,0.04)', borderRadius: 1, px: 1.25, py: 0.75 }}>
+                          <Typography variant="body2" sx={{ fontSize: 12, lineHeight: 1.5, mb: 0.25 }}>
+                            {m.memory}
+                          </Typography>
+                          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                            <Typography variant="caption" sx={{ fontSize: 10, color: 'text.secondary' }}>
+                              {new Date(m.createdAt).toLocaleDateString()}
+                            </Typography>
+                            <Typography variant="caption" sx={{ fontSize: 10, color: 'text.secondary', fontFamily: 'monospace', opacity: 0.7 }}>
+                              {agentType}
+                            </Typography>
+                            <Typography variant="caption" sx={{ fontSize: 10, color: '#2dce89', ml: 'auto' }}>
+                              {(m.score * 100).toFixed(0)}%
+                            </Typography>
+                          </Box>
+                        </Box>
+                      );
+                    })}
+                  </Box>
+                )}
+              </CardContent>
+            </Card>
+          </Box>
+        );
+      })()}
     </Box>
   );
 };

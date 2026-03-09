@@ -402,6 +402,48 @@ app.get('/api/foxmemory/graph-data', async (_req: Request, res: Response) => {
   }
 });
 
+app.post('/api/foxmemory/memories/search', async (req: Request<Record<string, never>, unknown, { query: string; top_k?: number }>, res: Response) => {
+  try {
+    const { query, top_k = 5 } = req.body;
+    if (!query) return res.status(400).json({ ok: false, error: 'query required' });
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/memories/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, user_id: foxmemoryUserId, top_k }),
+    });
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/api/foxmemory/graph/search', async (req: Request<Record<string, never>, unknown, { query: string }>, res: Response) => {
+  try {
+    const { query } = req.body;
+    if (!query) return res.status(400).json({ ok: false, error: 'query required' });
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/graph/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, user_id: foxmemoryUserId }),
+    });
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get('/api/foxmemory/graph/node/:id', async (req: Request<{ id: string }>, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/graph/nodes/${encodeURIComponent(req.params.id)}`);
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.get('/api/foxmemory/overview', async (_req: Request, res: Response) => {
   try {
     const overview = await probeFoxmemory();

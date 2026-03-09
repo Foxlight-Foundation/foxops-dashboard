@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { SessionsResponse, FoxmemoryResponse, FoxmemoryPromptsResponse, FoxmemoryGraphStats, FoxmemoryGraphData, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse, CronJobsResponse } from '../types';
+import type { SessionsResponse, FoxmemoryResponse, FoxmemoryPromptsResponse, FoxmemoryGraphStats, FoxmemoryGraphData, FoxmemoryGraphSearchResult, FoxmemoryMemorySearchResult, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse, CronJobsResponse } from '../types';
 
 export const dashboardApi = createApi({
   reducerPath: 'dashboardApi',
@@ -38,6 +38,12 @@ export const dashboardApi = createApi({
       query: (body) => ({ url: '/foxmemory/config/graph-prompt', method: 'PUT', body }),
       invalidatesTags: ['FoxmemoryPrompts'],
     }),
+    searchFoxmemoryGraph: builder.mutation<{ ok: boolean; data: FoxmemoryGraphSearchResult }, { query: string }>({
+      query: (body) => ({ url: '/foxmemory/graph/search', method: 'POST', body }),
+    }),
+    searchFoxmemoryMemories: builder.mutation<{ ok: boolean; data: FoxmemoryMemorySearchResult }, { query: string; top_k?: number }>({
+      query: (body) => ({ url: '/foxmemory/memories/search', method: 'POST', body }),
+    }),
     getCrons: builder.query<CronJobsResponse, void>({
       query: () => '/crons',
       providesTags: ['Crons'],
@@ -70,6 +76,8 @@ export const {
   useSetFoxmemoryExtractionPromptMutation,
   useSetFoxmemoryUpdatePromptMutation,
   useSetFoxmemoryGraphPromptMutation,
+  useSearchFoxmemoryGraphMutation,
+  useSearchFoxmemoryMemoriesMutation,
   useGetCronsQuery,
   useKillSessionMutation,
   useDeleteSessionMutation,

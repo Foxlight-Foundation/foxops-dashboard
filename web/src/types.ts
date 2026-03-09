@@ -121,6 +121,46 @@ export interface FoxmemoryGraphData {
   links: FoxmemoryGraphLink[];
 }
 
+export interface FoxmemoryRichGraphNode {
+  id: string;
+  labels: string[];
+  name: string;
+  properties: {
+    user_id?: string;
+    created?: { low: number; high: number };
+    [key: string]: unknown;
+  };
+}
+
+export interface FoxmemoryRichGraphEdge {
+  id: string;
+  source: string;
+  target: string;
+  type: string;
+  created?: { low: number; high: number };
+  properties: Record<string, unknown>;
+}
+
+export interface FoxmemoryGraphSearchResult {
+  nodes: FoxmemoryRichGraphNode[];
+  edges: FoxmemoryRichGraphEdge[];
+  matchCount: number;
+}
+
+export interface FoxmemoryMemoryResult {
+  id: string;
+  memory: string;
+  createdAt: string;
+  updatedAt?: string;
+  score: number;
+  runId?: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface FoxmemoryMemorySearchResult {
+  results: FoxmemoryMemoryResult[];
+}
+
 export interface FoxmemoryResponse {
   ok: boolean;
   baseUrl: string;
