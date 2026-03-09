@@ -17,6 +17,7 @@ import TopBar from './components/TopBar/TopBar';
 import AgentSessionsSection from './components/AgentSessionsSection/AgentSessionsSection';
 import CronJobsSection from './components/CronJobsSection/CronJobsSection';
 import FoxMemorySection from './components/FoxMemorySection/FoxMemorySection';
+import ModelConfigSection from './components/ModelConfigSection/ModelConfigSection';
 
 const AppShell = styled(Box)({ display: 'flex', minHeight: '100vh' });
 
@@ -164,6 +165,8 @@ const App = () => {
                 onKill={onKill}
                 onDelete={onDelete}
               />
+            ) : section === 'config' ? (
+              <ModelConfigSection />
             ) : (
               <FoxMemorySection
                 foxmemory={foxmemory}

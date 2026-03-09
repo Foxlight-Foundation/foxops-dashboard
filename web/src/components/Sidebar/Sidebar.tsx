@@ -3,6 +3,7 @@ import { styled } from '@mui/material/styles';
 import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import AccessAlarmRoundedIcon from '@mui/icons-material/AccessAlarmRounded';
+import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
 import type { SidebarProps } from './Sidebar.types';
 
 const DRAWER_WIDTH = 300;
@@ -75,6 +76,7 @@ const NAV_ITEMS = [
   { section: 'foxmemory' as const, label: 'FoxMemory', icon: <HubRoundedIcon fontSize="small" /> },
   { section: 'acp' as const, label: 'Agent Sessions', icon: <DashboardRoundedIcon fontSize="small" /> },
   { section: 'cron' as const, label: 'Cron Jobs', icon: <AccessAlarmRoundedIcon fontSize="small" /> },
+  { section: 'config' as const, label: 'Model Config', icon: <TuneRoundedIcon fontSize="small" /> },
 ];
 
 const Sidebar = ({ section, onSectionChange }: SidebarProps) => (

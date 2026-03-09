@@ -444,6 +444,98 @@ app.get('/api/foxmemory/graph/node/:id', async (req: Request<{ id: string }>, re
   }
 });
 
+// ── Model config proxy ─────────────────────────────────────────────────────
+
+app.get('/api/foxmemory/config/models', async (_req: Request, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/models`);
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.put('/api/foxmemory/config/model', async (req: Request<Record<string, never>, unknown, { key: string; value: string }>, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/model`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    });
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.delete('/api/foxmemory/config/model/:key', async (req: Request<{ key: string }>, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/model/${encodeURIComponent(req.params.key)}`, {
+      method: 'DELETE',
+    });
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get('/api/foxmemory/config/models/catalog', async (req: Request, res: Response) => {
+  try {
+    const role = req.query.role as string | undefined;
+    const url = role
+      ? `${foxmemoryBaseUrl}/v2/config/models/catalog?role=${encodeURIComponent(role)}`
+      : `${foxmemoryBaseUrl}/v2/config/models/catalog`;
+    const upstream = await fetch(url);
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.post('/api/foxmemory/config/models/catalog', async (req: Request, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/models/catalog`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    });
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.put('/api/foxmemory/config/models/catalog/:id', async (req: Request<{ id: string }>, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/models/catalog/${encodeURIComponent(req.params.id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req.body),
+    });
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.delete('/api/foxmemory/config/models/catalog/:id', async (req: Request<{ id: string }>, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/models/catalog/${encodeURIComponent(req.params.id)}`, {
+      method: 'DELETE',
+    });
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.get('/api/foxmemory/overview', async (_req: Request, res: Response) => {
   try {
     const overview = await probeFoxmemory();

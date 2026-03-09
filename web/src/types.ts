@@ -221,8 +221,43 @@ export interface CronJobsResponse {
 }
 
 export type ThemeMode = 'light' | 'dark';
-export type Section = 'acp' | 'foxmemory' | 'cron';
+export type Section = 'acp' | 'foxmemory' | 'cron' | 'config';
 export type ChartRange = '7d' | '30d' | 'all';
+
+export type ModelRoleKey = 'llm_model' | 'graph_llm_model';
+
+export interface CatalogModel {
+  id: string;
+  name: string;
+  description?: string | null;
+  roles: ('llm' | 'graph_llm')[];
+  input_mtok?: number | null;
+  cached_mtok?: number | null;
+  output_mtok?: number | null;
+  created_at?: number;
+}
+
+export interface EffectiveModelEntry {
+  value: string;
+  source: 'env' | 'persisted';
+  model: CatalogModel | null;
+}
+
+export interface FoxmemoryModelsResponse {
+  ok: boolean;
+  data: {
+    llmModel: EffectiveModelEntry;
+    graphLlmModel: EffectiveModelEntry;
+  };
+}
+
+export interface FoxmemoryCatalogResponse {
+  ok: boolean;
+  data: {
+    models: CatalogModel[];
+    count: number;
+  };
+}
 
 export interface Notice {
   severity: 'success' | 'warning' | 'error' | 'info';
