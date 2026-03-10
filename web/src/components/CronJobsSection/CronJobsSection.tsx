@@ -5,7 +5,6 @@ import {
   Collapse,
   Grid,
   IconButton,
-  Paper,
   Table,
   TableBody,
   TableCell,
@@ -15,6 +14,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
+import { GlassPaper } from '../shared/styled';
 import AccessAlarmRoundedIcon from '@mui/icons-material/AccessAlarmRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
@@ -72,7 +72,7 @@ const CronJobsSection = ({ jobs }: CronJobsSectionProps) => {
         </Grid>
       </Grid>
 
-      <TableContainer component={Paper} sx={{ borderRadius: 1, overflow: 'hidden' }}>
+      <TableContainer component={GlassPaper} sx={{ borderRadius: 1, overflow: 'hidden' }}>
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>

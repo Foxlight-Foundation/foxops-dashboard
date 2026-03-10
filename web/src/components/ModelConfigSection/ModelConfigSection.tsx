@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, FormControl, FormControlLabel, IconButton, MenuItem, Select, TextField, Typography } from '@mui/material';
+import { Box, Button, CardContent, Checkbox, Chip, CircularProgress, FormControl, FormControlLabel, IconButton, MenuItem, Select, TextField, Typography } from '@mui/material';
+import { GlassCard } from '../shared/styled';
 import MemoryRoundedIcon from '@mui/icons-material/MemoryRounded';
 import AccountTreeRoundedIcon from '@mui/icons-material/AccountTreeRounded';
 import AddRoundedIcon from '@mui/icons-material/AddRounded';
@@ -43,7 +44,7 @@ const ModelCard = ({ title, icon, roleKey, role, currentValue, source, catalogMo
   const selectedMeta = eligible.find((m) => m.id === selected);
 
   return (
-    <Card sx={{ borderRadius: 1, flex: 1 }}>
+    <GlassCard sx={{ borderRadius: 1, flex: 1 }}>
       <CardContent sx={{ p: 2.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <Box sx={{ color: 'text.secondary', display: 'flex' }}>{icon}</Box>
@@ -175,7 +176,7 @@ const ModelCard = ({ title, icon, roleKey, role, currentValue, source, catalogMo
           </Box>
         )}
       </CardContent>
-    </Card>
+    </GlassCard>
   );
 };
 
@@ -398,7 +399,7 @@ const ModelConfigSection = () => {
                   onCancel={() => setEditingId(null)}
                 />
               ) : (
-                <Card sx={{ borderRadius: 1 }}>
+                <GlassCard sx={{ borderRadius: 1 }}>
                   <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
                     {deletingId === m.id ? (
                       <Box sx={{ bgcolor: 'rgba(245,54,92,0.07)', border: '1px solid rgba(245,54,92,0.22)', borderRadius: 1, px: 1.5, py: 1 }}>
@@ -454,7 +455,7 @@ const ModelConfigSection = () => {
                       </Box>
                     )}
                   </CardContent>
-                </Card>
+                </GlassCard>
               )}
             </Box>
           ))}

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Box, Card, CardContent, Chip, Collapse, Grid, LinearProgress, Tab, Table, TableBody, TableCell, TableHead, TableRow, Tabs, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Box, CardContent, Chip, Collapse, Grid, LinearProgress, Tab, Table, TableBody, TableCell, TableHead, TableRow, Tabs, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { GlassCard } from '../shared/styled';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import MemoryRoundedIcon from '@mui/icons-material/MemoryRounded';
@@ -86,7 +87,11 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
 
   return (
     <>
-      <Tabs value={subView} onChange={(_, v: SubView) => setSubView(v)} sx={{ mb: 2.5, borderBottom: 1, borderColor: 'divider' }}>
+      <Tabs
+        value={subView}
+        onChange={(_, v: SubView) => setSubView(v)}
+        sx={{ mb: 2.5, borderBottom: 1, borderColor: 'divider' }}
+      >
         <Tab label="Performance" value="performance" />
         <Tab label="Agents" value="agents" />
         <Tab label="Graph" value="graph" />
@@ -133,7 +138,7 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
 
       <Grid container spacing={1.5}>
         <Grid item xs={12} lg={7}>
-          <Card sx={{ borderRadius: 1, height: '100%' }}>
+          <GlassCard sx={{ borderRadius: 1, height: '100%' }}>
             <CardContent sx={{ p: 3, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
               <Box display="flex" justifyContent="space-between" alignItems="center" mb={1} flexShrink={0}>
                 <Typography variant="h6" fontWeight={700}>Memory events by day</Typography>
@@ -164,12 +169,12 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
                 ))}
               </Grid>
             </CardContent>
-          </Card>
+          </GlassCard>
         </Grid>
         <Grid item xs={12} lg={5}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, height: '100%' }}>
             {/* Search Performance */}
-            <Card sx={{ borderRadius: 1 }}>
+            <GlassCard sx={{ borderRadius: 1 }}>
               <CardContent sx={{ p: 2.5 }}>
                 <Typography variant="subtitle1" fontWeight={700} gutterBottom>Search Performance (30d)</Typography>
                 <Grid container spacing={1.5}>
@@ -200,10 +205,10 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
                   />
                 </Box>
               </CardContent>
-            </Card>
+            </GlassCard>
 
             {/* Write Latency */}
-            <Card sx={{ borderRadius: 1 }}>
+            <GlassCard sx={{ borderRadius: 1 }}>
               <CardContent sx={{ p: 2.5 }}>
                 <Typography variant="subtitle1" fontWeight={700} gutterBottom>Write Latency (30d)</Typography>
                 <Grid container spacing={1.5} sx={{ mb: 1.5 }}>
@@ -250,13 +255,13 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
                   </Box>
                 </Box>
               </CardContent>
-            </Card>
+            </GlassCard>
           </Box>
         </Grid>
       </Grid>
 
       {/* Recent Activity */}
-      <Card sx={{ borderRadius: 1, mt: 1.5 }}>
+      <GlassCard sx={{ borderRadius: 1, mt: 1.5 }}>
         <CardContent sx={{ p: 2.5 }}>
           <Typography variant="subtitle1" fontWeight={700} gutterBottom>Recent Activity</Typography>
           {(foxmemory?.recentActivity || []).length === 0 ? (
@@ -325,7 +330,7 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
             </Table>
           )}
         </CardContent>
-      </Card>
+      </GlassCard>
       </>
       )}
     </>

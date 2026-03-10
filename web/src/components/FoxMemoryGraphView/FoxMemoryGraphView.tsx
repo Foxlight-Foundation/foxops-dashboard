@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
-import { Box, Card, CardContent, Chip, CircularProgress, FormControl, Grid, MenuItem, Select, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { Box, CardContent, Chip, CircularProgress, FormControl, Grid, MenuItem, Select, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import { GlassCard } from '../shared/styled';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import DeviceHubRoundedIcon from '@mui/icons-material/DeviceHubRounded';
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip as ReTooltip } from 'recharts';
@@ -201,7 +202,7 @@ const GraphExplorer = ({ minDegree }: { minDegree: number }) => {
 
   return (
     <Box sx={{ position: 'relative' }}>
-      <Card sx={{ borderRadius: 1, overflow: 'hidden' }}>
+      <GlassCard sx={{ borderRadius: 1, overflow: 'hidden' }}>
         <Box ref={containerRef} sx={{ width: '100%', cursor: 'grab', '&:active': { cursor: 'grabbing' }, lineHeight: 0 }}>
           <ForceGraph2D
             graphData={graphData}
@@ -252,7 +253,7 @@ const GraphExplorer = ({ minDegree }: { minDegree: number }) => {
             d3VelocityDecay={0.3}
           />
         </Box>
-      </Card>
+      </GlassCard>
 
       {selectedNode && (() => {
         const richNode = richData?.data?.nodes.find((n) => n.name === selectedNode.name);
@@ -272,7 +273,7 @@ const GraphExplorer = ({ minDegree }: { minDegree: number }) => {
             ref={detailRef}
             sx={{ position: 'absolute', top: 12, left: 12, right: 12, zIndex: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.22)', borderRadius: 1, overflow: 'hidden' }}
           >
-            <Card sx={{ borderRadius: 1, background: 'rgba(255,255,255,0.79)', backdropFilter: 'blur(21px)', border: '1px solid rgba(255,255,255,0.5)' }}>
+            <GlassCard sx={{ borderRadius: 1, background: (theme) => theme.palette.mode === 'dark' ? 'rgba(18,24,40,0.82)' : 'rgba(255,255,255,0.79)', backdropFilter: 'blur(21px)', border: (theme) => `1px solid ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.10)' : 'rgba(255,255,255,0.5)'}` }}>
               <CardContent sx={{ p: 2 }}>
                 {/* Header */}
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, flexWrap: 'wrap' }}>
@@ -362,7 +363,7 @@ const GraphExplorer = ({ minDegree }: { minDegree: number }) => {
                   </Box>
                 )}
               </CardContent>
-            </Card>
+            </GlassCard>
           </Box>
         );
       })()}
@@ -427,6 +428,8 @@ const FoxMemoryGraphView = ({ stats, diagnostics, loading }: FoxMemoryGraphViewP
             value="performance"
             sx={{
               px: 2, fontWeight: 600, fontSize: 12, borderRadius: '8px 0 0 8px !important',
+              backgroundColor: 'rgba(255,255,255,0.70)', color: '#1a1a2e',
+              '&:hover': { backgroundColor: 'rgba(255,255,255,0.84)' },
               '&.Mui-selected': {
                 background: 'linear-gradient(45deg, #1a3fc4 0%, #6690f5 100%)',
                 color: '#fff',
@@ -441,6 +444,8 @@ const FoxMemoryGraphView = ({ stats, diagnostics, loading }: FoxMemoryGraphViewP
             value="explorer"
             sx={{
               px: 2, fontWeight: 600, fontSize: 12, borderRadius: '0 8px 8px 0 !important',
+              backgroundColor: 'rgba(255,255,255,0.70)', color: '#1a1a2e',
+              '&:hover': { backgroundColor: 'rgba(255,255,255,0.84)' },
               '&.Mui-selected': {
                 background: 'linear-gradient(45deg, #1a3fc4 0%, #6690f5 100%)',
                 color: '#fff',
@@ -480,7 +485,7 @@ const FoxMemoryGraphView = ({ stats, diagnostics, loading }: FoxMemoryGraphViewP
         {/* Left column: node labels + relation types stacked */}
         <Grid item xs={12} md={7}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-            <Card sx={{ borderRadius: 1 }}>
+            <GlassCard sx={{ borderRadius: 1 }}>
               <CardContent sx={{ p: 2.5 }}>
                 <Typography variant="subtitle1" fontWeight={700} gutterBottom>Node labels</Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
@@ -500,10 +505,10 @@ const FoxMemoryGraphView = ({ stats, diagnostics, loading }: FoxMemoryGraphViewP
                   ))}
                 </Box>
               </CardContent>
-            </Card>
+            </GlassCard>
 
             {/* Top relation types */}
-            <Card sx={{ borderRadius: 1 }}>
+            <GlassCard sx={{ borderRadius: 1 }}>
               <CardContent sx={{ p: 2.5 }}>
                 <Typography variant="subtitle1" fontWeight={700} gutterBottom>Top relation types</Typography>
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
@@ -518,13 +523,13 @@ const FoxMemoryGraphView = ({ stats, diagnostics, loading }: FoxMemoryGraphViewP
                   ))}
                 </Box>
               </CardContent>
-            </Card>
+            </GlassCard>
           </Box>
         </Grid>
 
         {/* Right column: most connected pie */}
         <Grid item xs={12} md={5}>
-          <Card sx={{ borderRadius: 1, height: '100%' }}>
+          <GlassCard sx={{ borderRadius: 1, height: '100%' }}>
             <CardContent sx={{ p: 2.5, height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column' }}>
               <Typography variant="subtitle1" fontWeight={700} gutterBottom>Most connected</Typography>
               <Box sx={{ flex: 1, minHeight: 260 }}>
@@ -557,7 +562,7 @@ const FoxMemoryGraphView = ({ stats, diagnostics, loading }: FoxMemoryGraphViewP
                 ))}
               </Box>
             </CardContent>
-          </Card>
+          </GlassCard>
         </Grid>
       </Grid>
       </>

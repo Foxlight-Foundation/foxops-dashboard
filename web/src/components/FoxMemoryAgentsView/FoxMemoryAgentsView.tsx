@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, Card, CardContent, Chip, CircularProgress, Grid, TextField, Typography } from '@mui/material';
+import { Box, Button, CardContent, Chip, CircularProgress, Grid, TextField, Typography } from '@mui/material';
+import { GlassCard } from '../shared/styled';
 import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded';
 import type { FoxMemoryAgentsViewProps } from './FoxMemoryAgentsView.types';
 
@@ -55,7 +56,7 @@ const PromptEditor = ({
   };
 
   return (
-    <Card sx={{ borderRadius: 1, mb: 2 }}>
+    <GlassCard sx={{ borderRadius: 1, mb: 2 }}>
       <CardContent sx={{ p: 2.5 }}>
         <Typography variant="subtitle1" fontWeight={700} gutterBottom>{label}</Typography>
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{description}</Typography>
@@ -98,7 +99,7 @@ const PromptEditor = ({
           )}
         </Box>
       </CardContent>
-    </Card>
+    </GlassCard>
   );
 };
 
@@ -106,7 +107,7 @@ const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtract
   <>
     <Grid container spacing={2} mb={2}>
       <Grid item xs={12} md={4}>
-        <Card sx={{ borderRadius: 1, height: '100%' }}>
+        <GlassCard sx={{ borderRadius: 1, height: '100%' }}>
           <CardContent sx={{ p: 2.5 }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>Models</Typography>
             <ModelChip label="LLM" value={foxmemory?.llmModel} />
@@ -145,10 +146,10 @@ const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtract
               )}
             </Box>
           </CardContent>
-        </Card>
+        </GlassCard>
       </Grid>
       <Grid item xs={12} md={8}>
-        <Card sx={{ borderRadius: 1, height: '100%' }}>
+        <GlassCard sx={{ borderRadius: 1, height: '100%' }}>
           <CardContent sx={{ p: 2.5 }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>About the agent pipeline</Typography>
             <Typography variant="body2" color="text.secondary">
@@ -158,7 +159,7 @@ const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtract
               Editing a prompt and saving will persist it across service restarts. Clear the prompt to revert to the built-in default.
             </Typography>
           </CardContent>
-        </Card>
+        </GlassCard>
       </Grid>
     </Grid>
 

@@ -1,10 +1,10 @@
-import { Box, Card, CardContent, Typography } from '@mui/material';
+import { Box, CardContent, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
+import { GlassCard } from '../shared/styled';
 import type { StatCardProps } from './StatCard.types';
 
-const StyledCard = styled(Card)(({ theme }) => ({
+const StyledCard = styled(GlassCard)(({ theme }) => ({
   borderRadius: theme.shape.borderRadius,
-  backgroundColor: theme.palette.background.paper,
 }));
 
 const Content = styled(CardContent)({

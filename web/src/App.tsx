@@ -20,16 +20,34 @@ import FoxMemorySection from './components/FoxMemorySection/FoxMemorySection';
 import ModelConfigSection from './components/ModelConfigSection/ModelConfigSection';
 import LoginView from './components/LoginView/LoginView';
 import MfaView from './components/MfaView/MfaView';
+import SeatedFoxIcon from './components/shared/SeatedFoxIcon';
 
 const AppShell = styled(Box, { shouldForwardProp: (p) => p !== 'mode' })<{ mode: 'light' | 'dark' }>(({ mode }) => ({
+  position: 'relative',
   display: 'flex',
   flexDirection: 'column',
   height: '100vh',
   overflowY: 'auto',
   background: mode === 'dark'
     ? 'radial-gradient( circle farthest-corner at 50% 52.5%,  rgba(14,53,92,1) 0%, rgba(16,14,72,1) 90% )'
-    : 'linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%);',
+    : 'linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%)',
 }));
+
+const FoxBg = styled(Box)({
+  position: 'fixed',
+  top: 108,
+  right: 30,
+  bottom: 30,
+  display: 'flex',
+  alignItems: 'stretch',
+  pointerEvents: 'none',
+  opacity: 0.05,
+  zIndex: 0,
+  '& svg': {
+    height: '100%',
+    width: 'auto',
+  },
+});
 
 type RtkError = { data?: { error?: string }; error?: string; message?: string } | undefined;
 
@@ -207,6 +225,9 @@ const App = () => {
     <ThemeProvider theme={theme}>
       <CssBaseline />
       <AppShell mode={mode} sx={{ flexDirection: 'column' }}>
+        <FoxBg>
+          <SeatedFoxIcon color={mode === 'dark' ? '#ffffff' : '#000000'} size="100%" />
+        </FoxBg>
         <TopBar
           section={section}
           mode={mode}

@@ -49,9 +49,9 @@ const TopBar = ({
       <GlassAppBar position="sticky" color="transparent" elevation={0}>
         <Toolbar>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mr: 2, flexShrink: 0, width: 248 }}>
-            <BabyFoxIcon size={57} color={mode === 'dark' ? '#fff' : '#000'} />
-            <Typography variant="h4" fontWeight={700} sx={{ letterSpacing: 0.3, color: mode === 'dark' ? '#fff' : '#000' }}>
-              FoxOps<Typography component="sup" sx={{ fontSize: 21, fontWeight: 400, verticalAlign: 'super', ml: 0.25, color: mode === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)' }}>®</Typography>
+            <BabyFoxIcon size={48} color={mode === 'dark' ? '#fff' : '#000'} />
+            <Typography variant="h5" fontWeight={700} sx={{ letterSpacing: 0.3, color: mode === 'dark' ? '#fff' : '#000' }}>
+              FoxOps<Typography component="sup" sx={{ fontSize: 16, fontWeight: 400, verticalAlign: 'super', ml: 0.25, color: mode === 'dark' ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)' }}>®</Typography>
             </Typography>
           </Box>
           <Divider orientation="vertical" flexItem sx={{ mr: 2 }} />

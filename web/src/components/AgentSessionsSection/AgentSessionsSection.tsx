@@ -1,4 +1,5 @@
-import { Box, Chip, Grid, IconButton, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip } from '@mui/material';
+import { Box, Chip, Grid, IconButton, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Tooltip } from '@mui/material';
+import { GlassPaper } from '../shared/styled';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
 import DeleteForeverIcon from '@mui/icons-material/DeleteForever';
 import MemoryRoundedIcon from '@mui/icons-material/MemoryRounded';
@@ -48,7 +49,7 @@ const AgentSessionsSection = ({
         </Grid>
       </Grid>
 
-      <TableContainer component={Paper} sx={{ borderRadius: 1, overflow: 'hidden' }}>
+      <TableContainer component={GlassPaper} sx={{ borderRadius: 1, overflow: 'hidden' }}>
         <Table size="small" stickyHeader>
           <TableHead>
             <TableRow>
