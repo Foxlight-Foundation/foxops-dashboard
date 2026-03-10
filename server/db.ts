@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import os from 'os';
 
-const dbDir = path.join(os.homedir(), '.foxops');
+const dbDir = process.env.FOXOPS_DB_DIR || path.join(os.homedir(), '.foxops');
 if (!fs.existsSync(dbDir)) fs.mkdirSync(dbDir, { recursive: true });
 
 export const db = new Database(path.join(dbDir, 'foxops.db'));
@@ -21,6 +21,16 @@ db.exec(`
     mfa_enrolled_at TEXT,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS kill_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    requested_at TEXT NOT NULL DEFAULT (datetime('now')),
+    session_key TEXT NOT NULL,
+    session_id TEXT NOT NULL,
+    reason TEXT,
+    status TEXT NOT NULL,
+    note TEXT
   );
 `);
 
@@ -79,6 +89,20 @@ export const setPassword = (userId: number, password: string): void => { stmt.se
 export const verifyPassword = (user: DbUser, password: string): boolean => {
   if (!user.password_hash) return false;
   return bcrypt.compareSync(password, user.password_hash);
+};
+
+const killLogInsert = db.prepare<[string, string, string | null, string, string | null]>(
+  'INSERT INTO kill_log (session_key, session_id, reason, status, note) VALUES (?, ?, ?, ?, ?)',
+);
+
+export const insertKillLog = (entry: {
+  sessionKey: string;
+  sessionId: string;
+  reason?: string;
+  status: string;
+  note?: string;
+}): void => {
+  killLogInsert.run(entry.sessionKey, entry.sessionId, entry.reason ?? null, entry.status, entry.note ?? null);
 };
 
 export const seedAdminUser = (email: string, password: string): void => {

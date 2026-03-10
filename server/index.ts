@@ -3,8 +3,8 @@ import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
-import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import { gatewayCall } from './gateway.js';
 import session from 'express-session';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
@@ -13,7 +13,7 @@ import { generateSecret as totpGenerateSecret, generateURI as totpGenerateURI, v
 import QRCode from 'qrcode';
 import {
   findUserById, findUserByEmail, findUserByGoogleId,
-  createUser, linkGoogleId, setMfaSecret, verifyPassword, seedAdminUser,
+  createUser, linkGoogleId, setMfaSecret, verifyPassword, seedAdminUser, insertKillLog,
 } from './db.js';
 
 // ── Session type augmentation ───────────────────────────────────────────────
@@ -36,10 +36,8 @@ declare global {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const workspaceRoot = process.env.WORKSPACE_ROOT || path.resolve(__dirname, '..');
-const killQueuePath = path.join(workspaceRoot, 'docs', 'ACP_KILL_QUEUE.md');
-const foxmemoryBaseUrl = process.env.FOXMEMORY_BASE_URL || 'http://192.168.0.118:8082';
-const foxmemoryUserId = process.env.FOXMEMORY_USER_ID || 'thomastupper92618@gmail.com';
+const foxmemoryBaseUrl = process.env.FOXMEMORY_BASE_URL || 'http://localhost:8082';
+const foxmemoryUserId = process.env.FOXMEMORY_USER_ID || '';
 const sessionSecret = process.env.SESSION_SECRET || 'foxops-dev-secret-change-in-production';
 const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
@@ -451,14 +449,10 @@ app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
-app.get('/api/sessions', (_req: Request, res: Response) => {
+app.get('/api/sessions', async (_req: Request, res: Response) => {
   try {
-    const raw = execFileSync('openclaw', ['sessions', '--all-agents', '--json'], {
-      cwd: workspaceRoot,
-      encoding: 'utf8',
-    });
-    const parsed = JSON.parse(raw) as { sessions?: OpenclawSession[] };
-    const all = parsed.sessions || [];
+    const payload = await gatewayCall<{ sessions?: OpenclawSession[]; count?: number }>('sessions.list');
+    const all = payload.sessions || [];
 
     // Deduplicate by sessionId — when two keys share a sessionId (e.g. bare cron:<jobId>
     // and its cron:<jobId>:run:<runId> alias), keep the more specific (longer) key.
@@ -476,34 +470,33 @@ app.get('/api/sessions', (_req: Request, res: Response) => {
   }
 });
 
-app.get('/api/crons', (_req: Request, res: Response) => {
+app.get('/api/crons', async (_req: Request, res: Response) => {
   try {
-    const raw = execFileSync('openclaw', ['cron', 'list', '--json'], {
-      encoding: 'utf8',
-    });
-    // openclaw cron writes config warnings to stdout before the JSON — extract just the JSON object
-    const jsonStart = raw.indexOf('{');
-    const jsonStr = jsonStart >= 0 ? raw.slice(jsonStart) : raw;
-    const parsed = JSON.parse(jsonStr) as { jobs?: unknown[]; total?: number };
-    res.json({ ok: true, jobs: parsed.jobs || [], total: parsed.total ?? (parsed.jobs || []).length });
+    const payload = await gatewayCall<{ jobs?: unknown[]; total?: number }>('cron.list');
+    res.json({ ok: true, jobs: payload.jobs || [], total: payload.total ?? (payload.jobs || []).length });
   } catch (e: unknown) {
     res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e), jobs: [] });
   }
 });
 
-app.get('/api/crons/:id/runs', (req: Request, res: Response) => {
+app.get('/api/crons/:id/runs', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const limit = req.query.limit ? String(req.query.limit) : '20';
+  const limit = req.query.limit ? Number(req.query.limit) : 20;
   try {
-    const raw = execFileSync('openclaw', ['cron', 'runs', '--id', id, '--limit', limit], {
-      encoding: 'utf8',
-    });
-    const jsonStart = raw.indexOf('{');
-    const jsonStr = jsonStart >= 0 ? raw.slice(jsonStart) : raw;
-    const parsed = JSON.parse(jsonStr) as { entries?: unknown[]; total?: number; hasMore?: boolean };
-    res.json({ ok: true, entries: parsed.entries || [], total: parsed.total ?? 0, hasMore: parsed.hasMore ?? false });
+    const payload = await gatewayCall<{ entries?: unknown[]; total?: number; hasMore?: boolean }>('cron.runs', { id, limit });
+    res.json({ ok: true, entries: payload.entries || [], total: payload.total ?? 0, hasMore: payload.hasMore ?? false });
   } catch (e: unknown) {
     res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e), entries: [] });
+  }
+});
+
+app.post('/api/crons/:id/run', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const payload = await gatewayCall<{ ok?: boolean; ran?: boolean; reason?: string }>('cron.run', { id }, 60_000);
+    res.json({ ok: true, ran: payload.ran ?? false, reason: payload.reason ?? null });
+  } catch (e: unknown) {
+    res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
   }
 });
 
@@ -756,60 +749,23 @@ app.post('/api/sessions/kill', (req: Request<Record<string, never>, unknown, Kil
 
   try {
     const killReason = reason || 'Manual kill requested from dashboard';
-    let immediateKillSucceeded = false;
-    let immediateKillNote = '';
-
-    try {
-      execFileSync(
-        'openclaw',
-        ['agent', '--session-id', sessionId, '--message', 'STOP NOW. Terminate this run immediately and do not continue execution.', '--json'],
-        { cwd: workspaceRoot, encoding: 'utf8' }
-      );
-      immediateKillSucceeded = true;
-      immediateKillNote = `Immediate stop command sent to sessionId=${sessionId}`;
-    } catch (e: unknown) {
-      immediateKillNote = `Immediate kill attempt failed: ${e instanceof Error ? e.message : String(e)}`;
-    }
-
-    if (!fs.existsSync(killQueuePath)) {
-      fs.writeFileSync(
-        killQueuePath,
-        '# ACP Kill Queue\n\n| requested_at_ct | session_key | session_id | reason | status |\n|---|---|---|---|---|\n'
-      );
-    }
-
-    const requestedAt = new Date().toLocaleString('en-US', { timeZone: 'America/Chicago', hour12: false });
-    const queueStatus = immediateKillSucceeded ? 'attempted_immediate' : 'queued';
-    const queueReason = `${killReason}. ${immediateKillNote}`.replace(/\|/g, '\\|');
-    const queueRow = `| ${requestedAt} | ${sessionKey} | ${sessionId} | ${queueReason} | ${queueStatus} |\n`;
-    fs.appendFileSync(killQueuePath, queueRow);
-
-    return res.json({ ok: true, queued: !immediateKillSucceeded, immediateKillSucceeded, note: immediateKillNote });
+    // No gateway RPC exists for sending a stop message — log the request for the openclaw
+    // instance to handle on next heartbeat / operator review.
+    const note = 'Kill queued — no immediate stop RPC available; openclaw operator must action this.';
+    insertKillLog({ sessionKey, sessionId, reason: killReason, status: 'queued', note });
+    return res.json({ ok: true, queued: true, immediateKillSucceeded: false, note });
   } catch (error: unknown) {
     return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
 });
 
-app.post('/api/sessions/delete', (req: Request<Record<string, never>, unknown, { sessionKey: string; sessionId: string }>, res: Response) => {
+app.post('/api/sessions/delete', async (req: Request<Record<string, never>, unknown, { sessionKey: string; sessionId: string }>, res: Response) => {
   const { sessionKey, sessionId } = req.body || {};
   if (!sessionKey || !sessionId) return res.status(400).json({ ok: false, error: 'sessionKey and sessionId are required' });
 
   try {
-    // Extract agentId from key pattern "agent:<agentId>:..."
-    const agentId = sessionKey.split(':')[1] ?? 'main';
-    const home = process.env.HOME || '';
-    const transcriptPath = path.join(home, '.openclaw', 'agents', agentId, 'sessions', `${sessionId}.jsonl`);
-
-    if (fs.existsSync(transcriptPath)) {
-      fs.unlinkSync(transcriptPath);
-    }
-
-    // Clean up the orphaned store entry
-    execFileSync('openclaw', ['sessions', 'cleanup', '--fix-missing', '--enforce', '--agent', agentId], {
-      encoding: 'utf8',
-    });
-
-    return res.json({ ok: true, deleted: true, transcriptPath });
+    await gatewayCall('sessions.delete', { key: sessionKey });
+    return res.json({ ok: true, deleted: true, sessionKey, sessionId });
   } catch (error: unknown) {
     return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
