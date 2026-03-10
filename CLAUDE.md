@@ -46,17 +46,15 @@ yarn build:web
 - Vite proxies `/api/*` → `http://localhost:8787`
 - RTK Query polls every 15s (`skipPollingIfUnfocused: true`)
 - UI preferences (theme, section, chartRange) persisted via redux-persist to localStorage
-- All file paths in the server resolve relative to `workspaceRoot`, which defaults to `path.resolve(__dirname, '..')` (repo root) and can be overridden with `WORKSPACE_ROOT` env var
+- Sessions/crons fetched via openclaw Gateway WebSocket RPC (`server/gateway.ts`)
+- Auth DB (SQLite) stored at `FOXOPS_DB_DIR` (default `~/.foxops/foxops.db`)
 
 ## Data sources (server)
-- `docs/ACP_SESSION_REGISTRY.md` — parsed markdown table
-- `docs/ACP_KILL_QUEUE.md` — kill request audit trail
-- `~/.openclaw/logs/gateway.log` / `gateway.err.log` — log parsing
-- `artifacts/root-cause-eval-*.json` — retrieval quality
-- Remote FoxMemory API (`FOXMEMORY_BASE_URL`, default `http://192.168.0.118:8082`)
+- openclaw Gateway WS (`OPENCLAW_GATEWAY_URL`) — sessions, crons, cron run history
+- Remote FoxMemory API (`FOXMEMORY_BASE_URL`) — memory stats, graph, config
+- SQLite DB (`FOXOPS_DB_DIR/foxops.db`) — user auth, kill audit log
 
 ## What NOT to do
 - Don't add client-side routing — this is a single-page operational dashboard
-- Don't change the markdown-as-database pattern for the registry/kill queue
 - Don't replace MUI components — extend them with `styled()`
 - Never auto-commit — always wait for explicit instruction to commit or push
