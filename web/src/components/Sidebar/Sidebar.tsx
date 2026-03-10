@@ -11,19 +11,28 @@ const DRAWER_WIDTH = 300;
 const StyledDrawer = styled(Drawer)(() => ({
   width: DRAWER_WIDTH,
   flexShrink: 0,
+  position: 'sticky',
+  top: 78,
+  height: 'calc(100vh - 85px)',
+  alignSelf: 'flex-start',
   '& .MuiDrawer-paper': {
     width: DRAWER_WIDTH,
+    height: '100%',
     boxSizing: 'border-box',
     border: 0,
     backgroundColor: 'transparent',
     boxShadow: 'none',
     overflow: 'visible',
+    position: 'relative',
   },
 }));
 
 const SidebarPanel = styled(Box)(({ theme }) => ({
-  margin: theme.spacing(1.5),
-  height: `calc(100% - ${theme.spacing(3)})`,
+  marginTop: '5px',
+  marginLeft: theme.spacing(1.5),
+  marginRight: theme.spacing(1.5),
+  marginBottom: theme.spacing(1.5),
+  height: `calc(100% - 5px - ${theme.spacing(1.5)})`,
   borderRadius: 16,
   backgroundColor: theme.palette.mode === 'dark' ? '#ffffff' : '#1a1a2e',
   display: 'flex',
@@ -36,13 +45,6 @@ const SidebarPanel = styled(Box)(({ theme }) => ({
   overflow: 'hidden',
 }));
 
-const NavDivider = styled(Box)(({ theme }) => ({
-  height: 2,
-  background: theme.palette.mode === 'dark'
-    ? 'linear-gradient(to right, transparent, rgba(0,0,0,0.12) 25%, rgba(0,0,0,0.12) 75%, transparent)'
-    : 'linear-gradient(to right, transparent, rgba(255,255,255,0.18) 25%, rgba(255,255,255,0.18) 75%, transparent)',
-  margin: `${theme.spacing(1)} ${theme.spacing(-2)} ${theme.spacing(1.5)}`,
-}));
 
 const NavItem = styled(ListItemButton)(({ theme }) => ({
   borderRadius: 10,
@@ -82,17 +84,6 @@ const NAV_ITEMS = [
 const Sidebar = ({ section, onSectionChange }: SidebarProps) => (
   <StyledDrawer variant="permanent">
     <SidebarPanel>
-      <Box display="flex" alignItems="center" gap={1} px={0.5} py={0.75} mb={0.5}>
-        <Typography component="span" sx={{ fontSize: 22, lineHeight: 1 }}>🦊</Typography>
-        <Typography
-          variant="subtitle1"
-          fontWeight={700}
-          sx={{ color: (theme) => theme.palette.mode === 'dark' ? '#344767' : '#fff', letterSpacing: 0.3 }}
-        >
-          FoxOps
-        </Typography>
-      </Box>
-      <NavDivider />
       <List disablePadding sx={{ display: 'grid' }}>
         {NAV_ITEMS.map(({ section: s, label, icon }) => (
           <NavItem key={s} selected={section === s} onClick={() => onSectionChange(s)}>

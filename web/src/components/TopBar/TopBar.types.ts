@@ -1,4 +1,4 @@
-import type { Section, ThemeMode } from '../../types';
+import type { AuthUser, Section, ThemeMode } from '../../types';
 
 export interface TopBarProps {
   section: Section;
@@ -9,6 +9,8 @@ export interface TopBarProps {
   lastRefreshLabel: string;
   isLoading: boolean;
   apiErrorText: string;
+  user: AuthUser | null;
   onRefresh: () => void;
   onToggleMode: () => void;
+  onLogout: () => void;
 }

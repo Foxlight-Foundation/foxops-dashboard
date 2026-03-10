@@ -1,9 +1,38 @@
-import express, { Request, Response } from 'express';
+import 'dotenv/config';
+import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import path from 'path';
 import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
+import session from 'express-session';
+import passport from 'passport';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import { Strategy as LocalStrategy } from 'passport-local';
+import { generateSecret as totpGenerateSecret, generateURI as totpGenerateURI, verifySync as totpVerifySync } from 'otplib';
+import QRCode from 'qrcode';
+import {
+  findUserById, findUserByEmail, findUserByGoogleId,
+  createUser, linkGoogleId, setMfaSecret, verifyPassword, seedAdminUser,
+} from './db.js';
+
+// ── Session type augmentation ───────────────────────────────────────────────
+declare module 'express-session' {
+  interface SessionData {
+    mfaVerified?: boolean;
+  }
+}
+
+declare global {
+  namespace Express {
+    interface User {
+      id: number;
+      email: string;
+      name: string;
+      picture: string;
+    }
+  }
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,6 +40,12 @@ const workspaceRoot = process.env.WORKSPACE_ROOT || path.resolve(__dirname, '..'
 const killQueuePath = path.join(workspaceRoot, 'docs', 'ACP_KILL_QUEUE.md');
 const foxmemoryBaseUrl = process.env.FOXMEMORY_BASE_URL || 'http://192.168.0.118:8082';
 const foxmemoryUserId = process.env.FOXMEMORY_USER_ID || 'thomastupper92618@gmail.com';
+const sessionSecret = process.env.SESSION_SECRET || 'foxops-dev-secret-change-in-production';
+const googleClientId = process.env.GOOGLE_CLIENT_ID || '';
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || '';
+const allowedEmails = (process.env.ALLOWED_EMAILS || '').split(',').map((e) => e.trim()).filter(Boolean);
+const appBaseUrl = process.env.APP_BASE_URL || 'http://localhost:5177';
+
 const qdrantBaseUrl = process.env.QDRANT_BASE_URL || (() => {
   try {
     const u = new URL(foxmemoryBaseUrl);
@@ -85,6 +120,9 @@ interface FoxmemoryDiagnostics {
   graphEnabled?: boolean;
   graphLlmModel?: string | null;
   neo4jUrl?: string | null;
+  neo4jConnected?: boolean;
+  neo4jNodeCount?: number | null;
+  neo4jRelationCount?: number | null;
 }
 
 interface FoxmemoryOverview {
@@ -255,8 +293,159 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
 // ── Express app ────────────────────────────────────────────────────────────────
 
 const app = express();
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+
+// ── Session + Passport ──────────────────────────────────────────────────────
+app.use(session({
+  secret: sessionSecret,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  },
+}));
+app.use(passport.initialize());
+app.use(passport.session());
+
+// ── Local (email + password) strategy ──────────────────────────────────────
+passport.use(new LocalStrategy({ usernameField: 'email' }, (email, password, done) => {
+  const dbUser = findUserByEmail(email.toLowerCase().trim());
+  if (!dbUser || !verifyPassword(dbUser, password)) return done(null, false, { message: 'Invalid credentials' });
+  return done(null, { id: dbUser.id, email: dbUser.email, name: dbUser.email, picture: '' });
+}));
+
+// ── Google OAuth strategy ───────────────────────────────────────────────────
+if (googleClientId && googleClientSecret) {
+  passport.use(new GoogleStrategy(
+    { clientID: googleClientId, clientSecret: googleClientSecret, callbackURL: `${appBaseUrl}/auth/google/callback` },
+    (_accessToken, _refreshToken, profile, done) => {
+      const email = (profile.emails?.[0]?.value || '').toLowerCase().trim();
+      if (allowedEmails.length > 0 && !allowedEmails.includes(email)) return done(null, false);
+      let dbUser = findUserByGoogleId(profile.id);
+      if (!dbUser) {
+        dbUser = findUserByEmail(email);
+        if (dbUser) {
+          linkGoogleId(dbUser.id, profile.id);
+        } else {
+          dbUser = createUser({ email, googleId: profile.id, username: profile.displayName });
+        }
+      }
+      return done(null, { id: dbUser.id, email: dbUser.email, name: dbUser.email, picture: profile.photos?.[0]?.value || '' });
+    },
+  ));
+}
+
+passport.serializeUser((user, done) => done(null, (user as Express.User).id));
+passport.deserializeUser((id, done) => {
+  const dbUser = findUserById(id as number);
+  if (!dbUser) return done(null, false);
+  done(null, { id: dbUser.id, email: dbUser.email, name: dbUser.email, picture: '' });
+});
+
+// ── Seed admin user from env (only if DB is empty) ─────────────────────────
+if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+  seedAdminUser(process.env.ADMIN_EMAIL, process.env.ADMIN_PASSWORD);
+}
+
+// ── Auth routes (public) ────────────────────────────────────────────────────
+app.get('/auth/google', (req: Request, res: Response, next: NextFunction) => {
+  if (!googleClientId || !googleClientSecret) {
+    return res.status(503).send('Google OAuth not configured. Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.');
+  }
+  return passport.authenticate('google', { scope: ['email', 'profile'] })(req, res, next);
+});
+
+app.get('/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: `${appBaseUrl}/?auth=failed` }),
+  (_req: Request, res: Response) => {
+    res.redirect(`${appBaseUrl}/`);
+  },
+);
+
+app.get('/auth/logout', (req: Request, res: Response) => {
+  req.logout((err) => {
+    if (err) return res.status(500).json({ ok: false });
+    req.session.destroy(() => res.redirect(`${appBaseUrl}/`));
+  });
+});
+
+// ── Local login ─────────────────────────────────────────────────────────────
+app.post('/api/auth/login',
+  (req: Request, res: Response, next: NextFunction) => {
+    passport.authenticate('local', (err: unknown, user: Express.User | false, info: { message?: string } | undefined) => {
+      if (err) return next(err);
+      if (!user) return res.status(401).json({ ok: false, error: info?.message || 'Invalid credentials' });
+      req.logIn(user, (loginErr) => {
+        if (loginErr) return next(loginErr);
+        const dbUser = findUserById(user.id);
+        return res.json({
+          ok: true,
+          user: { email: user.email, name: user.name, picture: user.picture },
+          mfaEnrolled: !!dbUser?.mfa_secret,
+          mfaVerified: !!req.session.mfaVerified,
+        });
+      });
+    })(req, res, next);
+  },
+);
+
+app.get('/api/auth/me', (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ ok: false, error: 'Unauthenticated' });
+  const user = req.user!;
+  const dbUser = findUserById(user.id);
+  return res.json({
+    ok: true,
+    user: { email: user.email, name: user.name, picture: user.picture },
+    mfaEnrolled: !!dbUser?.mfa_secret,
+    mfaVerified: !!req.session.mfaVerified,
+  });
+});
+
+app.get('/api/auth/mfa/setup', (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ ok: false, error: 'Unauthenticated' });
+  const secret = totpGenerateSecret();
+  const otpauth = totpGenerateURI({ label: req.user!.email, issuer: 'FoxOps', secret });
+  QRCode.toDataURL(otpauth, (err, dataUrl) => {
+    if (err) return res.status(500).json({ ok: false, error: 'QR generation failed' });
+    return res.json({ ok: true, secret, qrDataUrl: dataUrl });
+  });
+});
+
+app.post('/api/auth/mfa/enroll', (req: Request<Record<string, never>, unknown, { secret: string; token: string }>, res: Response) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ ok: false, error: 'Unauthenticated' });
+  const { secret, token } = req.body;
+  if (!totpVerifySync({ token, secret }).valid) return res.status(400).json({ ok: false, error: 'Invalid token' });
+  setMfaSecret(req.user!.id, secret);
+  req.session.mfaVerified = true;
+  return res.json({ ok: true });
+});
+
+app.post('/api/auth/mfa/verify', (req: Request<Record<string, never>, unknown, { token: string }>, res: Response) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ ok: false, error: 'Unauthenticated' });
+  const { token } = req.body;
+  const dbUser = findUserById(req.user!.id);
+  if (!dbUser?.mfa_secret) return res.status(400).json({ ok: false, error: 'MFA not enrolled' });
+  if (!totpVerifySync({ token, secret: dbUser.mfa_secret }).valid) return res.status(400).json({ ok: false, error: 'Invalid token' });
+  req.session.mfaVerified = true;
+  return res.json({ ok: true });
+});
+
+// ── Auth guard — all /api/* routes below require authentication ─────────────
+const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
+  if (req.isAuthenticated()) return next();
+  return res.status(401).json({ ok: false, error: 'Unauthorized' });
+};
+
+const requireMfa = (req: Request, res: Response, next: NextFunction) => {
+  if (req.session.mfaVerified) return next();
+  return res.status(403).json({ ok: false, error: 'MFA verification required' });
+};
+
+app.use('/api', isAuthenticated);
 
 app.get('/api/health', (_req: Request, res: Response) => {
   res.json({ ok: true });
@@ -456,7 +645,7 @@ app.get('/api/foxmemory/config/models', async (_req: Request, res: Response) => 
   }
 });
 
-app.put('/api/foxmemory/config/model', async (req: Request<Record<string, never>, unknown, { key: string; value: string }>, res: Response) => {
+app.put('/api/foxmemory/config/model', requireMfa, async (req: Request<Record<string, never>, unknown, { key: string; value: string }>, res: Response) => {
   try {
     const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/model`, {
       method: 'PUT',
@@ -470,7 +659,7 @@ app.put('/api/foxmemory/config/model', async (req: Request<Record<string, never>
   }
 });
 
-app.delete('/api/foxmemory/config/model/:key', async (req: Request<{ key: string }>, res: Response) => {
+app.delete('/api/foxmemory/config/model/:key', requireMfa, async (req: Request<{ key: string }>, res: Response) => {
   try {
     const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/model/${encodeURIComponent(req.params.key)}`, {
       method: 'DELETE',

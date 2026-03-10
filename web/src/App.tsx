@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Container, CssBaseline } from '@mui/material';
 import { createTheme, styled, ThemeProvider } from '@mui/material/styles';
 import { useDispatch, useSelector } from 'react-redux';
@@ -11,15 +11,25 @@ import {
   useDeleteSessionMutation,
 } from './services/dashboardApi';
 import type { RootState } from './store';
-import type { OpenclawSession, Notice } from './types';
+import type { AuthState, AuthUser, OpenclawSession, Notice } from './types';
 import Sidebar from './components/Sidebar/Sidebar';
 import TopBar from './components/TopBar/TopBar';
 import AgentSessionsSection from './components/AgentSessionsSection/AgentSessionsSection';
 import CronJobsSection from './components/CronJobsSection/CronJobsSection';
 import FoxMemorySection from './components/FoxMemorySection/FoxMemorySection';
 import ModelConfigSection from './components/ModelConfigSection/ModelConfigSection';
+import LoginView from './components/LoginView/LoginView';
+import MfaView from './components/MfaView/MfaView';
 
-const AppShell = styled(Box)({ display: 'flex', minHeight: '100vh' });
+const AppShell = styled(Box, { shouldForwardProp: (p) => p !== 'mode' })<{ mode: 'light' | 'dark' }>(({ mode }) => ({
+  display: 'flex',
+  flexDirection: 'column',
+  height: '100vh',
+  overflowY: 'auto',
+  background: mode === 'dark'
+    ? 'radial-gradient( circle farthest-corner at 50% 52.5%,  rgba(14,53,92,1) 0%, rgba(16,14,72,1) 90% )'
+    : 'linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%);',
+}));
 
 type RtkError = { data?: { error?: string }; error?: string; message?: string } | undefined;
 
@@ -37,6 +47,28 @@ const App = () => {
   const dispatch = useDispatch();
   const { mode, section, chartRange } = useSelector((s: RootState) => s.ui);
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [authState, setAuthState] = useState<AuthState>('loading');
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const authError = params.get('auth');
+    if (authError) {
+      window.history.replaceState({}, '', '/');
+      setAuthState('unauthenticated');
+      return;
+    }
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((data: { ok: boolean; user?: AuthUser; mfaEnrolled?: boolean; mfaVerified?: boolean }) => {
+        if (!data.ok || !data.user) { setAuthState('unauthenticated'); return; }
+        setAuthUser(data.user);
+        if (!data.mfaEnrolled) { setAuthState('mfa-setup'); return; }
+        if (!data.mfaVerified) { setAuthState('mfa-verify'); return; }
+        setAuthState('authenticated');
+      })
+      .catch(() => setAuthState('unauthenticated'));
+  }, []);
 
   const {
     data: sessionsData,
@@ -133,24 +165,65 @@ const App = () => {
     : section === 'foxmemory' && foxIsError ? getErrorText(foxError as RtkError)
     : '';
 
+  if (authState === 'loading') {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #1a1a2e 100%)' }} />
+      </ThemeProvider>
+    );
+  }
+
+  if (authState === 'unauthenticated') {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <LoginView
+          onAuth={(user, mfaEnrolled, mfaVerified) => {
+            setAuthUser(user);
+            if (!mfaEnrolled) { setAuthState('mfa-setup'); return; }
+            if (!mfaVerified) { setAuthState('mfa-verify'); return; }
+            setAuthState('authenticated');
+          }}
+        />
+      </ThemeProvider>
+    );
+  }
+
+  if ((authState === 'mfa-setup' || authState === 'mfa-verify') && authUser) {
+    return (
+      <ThemeProvider theme={theme}>
+        <CssBaseline />
+        <MfaView
+          user={authUser}
+          mode={authState === 'mfa-setup' ? 'setup' : 'verify'}
+          onSuccess={() => setAuthState('authenticated')}
+        />
+      </ThemeProvider>
+    );
+  }
+
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <AppShell sx={{ backgroundColor: 'background.default' }}>
-        <Sidebar section={section} onSectionChange={(s) => dispatch(setSection(s))} />
-        <Box sx={{ flexGrow: 1 }}>
-          <TopBar
-            section={section}
-            mode={mode}
-            sessionCount={sessions.length}
-            cronJobCount={cronJobs.length}
-            foxmemoryBaseUrl={foxmemory?.baseUrl}
-            lastRefreshLabel={lastRefreshLabel}
-            isLoading={sessionsFetching || foxLoading || cronsFetching || killLoading}
-            apiErrorText={apiErrorText}
-            onRefresh={onRefresh}
-            onToggleMode={() => dispatch(toggleMode())}
-          />
+      <AppShell mode={mode} sx={{ flexDirection: 'column' }}>
+        <TopBar
+          section={section}
+          mode={mode}
+          sessionCount={sessions.length}
+          cronJobCount={cronJobs.length}
+          foxmemoryBaseUrl={foxmemory?.baseUrl}
+          lastRefreshLabel={lastRefreshLabel}
+          isLoading={sessionsFetching || foxLoading || cronsFetching || killLoading}
+          apiErrorText={apiErrorText}
+          user={authUser}
+          onRefresh={onRefresh}
+          onToggleMode={() => dispatch(toggleMode())}
+          onLogout={() => { window.location.href = '/auth/logout'; }}
+        />
+        <Box sx={{ display: 'flex', flexGrow: 1 }}>
+          <Sidebar section={section} onSectionChange={(s) => dispatch(setSection(s))} />
+          <Box sx={{ flexGrow: 1 }}>
           <Container maxWidth="xl" sx={{ py: 3 }}>
             {notice && <Alert severity={notice.severity} sx={{ mb: 2 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
             {section === 'cron' ? (
@@ -175,6 +248,7 @@ const App = () => {
               />
             )}
           </Container>
+          </Box>
         </Box>
       </AppShell>
     </ThemeProvider>

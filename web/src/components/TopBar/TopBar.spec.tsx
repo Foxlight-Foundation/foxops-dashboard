@@ -18,8 +18,10 @@ const baseProps = {
   lastRefreshLabel: '12:00:00 PM',
   isLoading: false,
   apiErrorText: '',
+  user: null,
   onRefresh: vi.fn(),
   onToggleMode: vi.fn(),
+  onLogout: vi.fn(),
 };
 
 describe('TopBar', () => {

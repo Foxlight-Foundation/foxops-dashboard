@@ -222,6 +222,14 @@ export interface CronJobsResponse {
 
 export type ThemeMode = 'light' | 'dark';
 export type Section = 'acp' | 'foxmemory' | 'cron' | 'config';
+
+export interface AuthUser {
+  email: string;
+  name: string;
+  picture: string;
+}
+
+export type AuthState = 'loading' | 'unauthenticated' | 'mfa-setup' | 'mfa-verify' | 'authenticated';
 export type ChartRange = '7d' | '30d' | 'all';
 
 export type ModelRoleKey = 'llm_model' | 'graph_llm_model';
