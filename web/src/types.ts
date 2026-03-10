@@ -324,3 +324,7 @@ export interface DeleteSessionResponse {
   transcriptPath?: string;
   error?: string;
 }
+
+
+export type SectionHealth = 'ok' | 'error';
+export type HealthMap = Partial<Record<Section, SectionHealth>>;

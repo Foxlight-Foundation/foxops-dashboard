@@ -1,9 +1,12 @@
-import { Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Typography } from '@mui/material';
+import { Box, Drawer, List, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from '@mui/material';
 import { styled } from '@mui/material/styles';
 import DashboardRoundedIcon from '@mui/icons-material/DashboardRounded';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
 import AccessAlarmRoundedIcon from '@mui/icons-material/AccessAlarmRounded';
 import TuneRoundedIcon from '@mui/icons-material/TuneRounded';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded';
+import type { SectionHealth } from '../../types';
 import type { SidebarProps } from './Sidebar.types';
 
 const DRAWER_WIDTH = 300;
@@ -45,7 +48,6 @@ const SidebarPanel = styled(Box)(({ theme }) => ({
   overflow: 'hidden',
 }));
 
-
 const NavItem = styled(ListItemButton)(({ theme }) => ({
   borderRadius: 10,
   marginBottom: 4,
@@ -74,6 +76,32 @@ const NavItem = styled(ListItemButton)(({ theme }) => ({
   },
 }));
 
+const badgeSx = (color: string) => ({
+  fontSize: 21,
+  color,
+  ml: 'auto',
+  flexShrink: 0,
+  '& path': {
+    stroke: 'white',
+    strokeWidth: '2px',
+    paintOrder: 'stroke fill',
+  },
+});
+
+const HealthBadge = ({ health }: { health?: SectionHealth }) => {
+  if (health === 'error') return (
+    <Tooltip title="One or more error conditions exist" arrow placement="right">
+      <ErrorRoundedIcon sx={badgeSx('#f5365c')} />
+    </Tooltip>
+  );
+  if (health === 'ok') return (
+    <Tooltip title="All operations normal" arrow placement="right">
+      <CheckCircleRoundedIcon sx={badgeSx('#00a55d')} />
+    </Tooltip>
+  );
+  return null;
+};
+
 const NAV_ITEMS = [
   { section: 'foxmemory' as const, label: 'FoxMemory', icon: <HubRoundedIcon fontSize="small" /> },
   { section: 'acp' as const, label: 'Agent Sessions', icon: <DashboardRoundedIcon fontSize="small" /> },
@@ -81,7 +109,7 @@ const NAV_ITEMS = [
   { section: 'config' as const, label: 'Model Config', icon: <TuneRoundedIcon fontSize="small" /> },
 ];
 
-const Sidebar = ({ section, onSectionChange }: SidebarProps) => (
+const Sidebar = ({ section, onSectionChange, health }: SidebarProps) => (
   <StyledDrawer variant="permanent">
     <SidebarPanel>
       <List disablePadding sx={{ display: 'grid' }}>
@@ -89,6 +117,7 @@ const Sidebar = ({ section, onSectionChange }: SidebarProps) => (
           <NavItem key={s} selected={section === s} onClick={() => onSectionChange(s)}>
             <ListItemIcon>{icon}</ListItemIcon>
             <ListItemText primary={label} />
+            <HealthBadge health={health?.[s]} />
           </NavItem>
         ))}
       </List>

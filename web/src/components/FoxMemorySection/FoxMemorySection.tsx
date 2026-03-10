@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Box, CardContent, Chip, Collapse, Grid, LinearProgress, Tab, Table, TableBody, TableCell, TableHead, TableRow, Tabs, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
+import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded';
 import { GlassCard } from '../shared/styled';
 import ExpandMoreRoundedIcon from '@mui/icons-material/ExpandMoreRounded';
 import HubRoundedIcon from '@mui/icons-material/HubRounded';
@@ -44,7 +46,14 @@ const PillTooltip = ({ active, payload, label }: TooltipContentProps<number, str
   );
 };
 
-const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemorySectionProps) => {
+const TabLabel = ({ label, health }: { label: string; health?: import('../../types').SectionHealth }) => (
+  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+    {label}
+    {health === 'error' && <ErrorRoundedIcon sx={{ fontSize: 16, color: '#f5365c' }} />}
+  </Box>
+);
+
+const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange, tabHealth }: FoxMemorySectionProps) => {
   const [subView, setSubView] = useState<SubView>('performance');
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const toggleRow = (i: number) => setExpandedRows((prev) => {
@@ -92,9 +101,9 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange }: FoxMemo
         onChange={(_, v: SubView) => setSubView(v)}
         sx={{ mb: 2.5, borderBottom: 1, borderColor: 'divider' }}
       >
-        <Tab label="Performance" value="performance" />
-        <Tab label="Agents" value="agents" />
-        <Tab label="Graph" value="graph" />
+        <Tab label={<TabLabel label="Performance" health={tabHealth?.performance} />} value="performance" />
+        <Tab label={<TabLabel label="Agents" health={tabHealth?.agents} />} value="agents" />
+        <Tab label={<TabLabel label="Graph" health={tabHealth?.graph} />} value="graph" />
       </Tabs>
 
       {subView === 'graph' ? (

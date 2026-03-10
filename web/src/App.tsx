@@ -95,7 +95,7 @@ const App = () => {
     error: sessionsError,
     refetch: refetchSessions,
     fulfilledTimeStamp: sessionsFulfilledAt,
-  } = useGetSessionsQuery(undefined, { skip: section !== 'acp', pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnReconnect: true });
+  } = useGetSessionsQuery(undefined, { pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnReconnect: true });
 
   const {
     data: foxmemory,
@@ -111,7 +111,7 @@ const App = () => {
     isFetching: cronsFetching,
     refetch: refetchCrons,
     fulfilledTimeStamp: cronsFulfilledAt,
-  } = useGetCronsQuery(undefined, { skip: section !== 'cron', pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnReconnect: true });
+  } = useGetCronsQuery(undefined, { pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnReconnect: true });
 
   const [killSession, { isLoading: killLoading }] = useKillSessionMutation();
   const [deleteSession, { isLoading: deleteLoading }] = useDeleteSessionMutation();
@@ -140,6 +140,13 @@ const App = () => {
   const activeSessions = sessions.filter(isActive);
   const staleSessions = sessions.filter((s) => !isActive(s));
   const cronJobs = cronsData?.jobs || [];
+
+  const healthMap: import('./types').HealthMap = {
+    acp: sessionsData ? (sessions.some((s) => s.abortedLastRun) ? 'error' : 'ok') : undefined,
+    cron: cronsData ? (cronJobs.some((j) => (j.state?.lastRunStatus ?? j.state?.lastStatus) === 'error') ? 'error' : 'ok') : undefined,
+    foxmemory: foxIsError ? 'error' : foxmemory ? 'ok' : undefined,
+    config: 'ok',
+  };
 
   const onRefresh = () => {
     if (section === 'acp') refetchSessions();
@@ -243,7 +250,7 @@ const App = () => {
           onLogout={() => { window.location.href = '/auth/logout'; }}
         />
         <Box sx={{ display: 'flex', flexGrow: 1 }}>
-          <Sidebar section={section} onSectionChange={(s) => dispatch(setSection(s))} />
+          <Sidebar section={section} onSectionChange={(s) => dispatch(setSection(s))} health={healthMap} />
           <Box sx={{ flexGrow: 1 }}>
           <Container maxWidth="xl" sx={{ py: 3 }}>
             {notice && <Alert severity={notice.severity} sx={{ mb: 2 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
@@ -266,6 +273,7 @@ const App = () => {
                 foxmemory={foxmemory}
                 chartRange={chartRange}
                 onChartRangeChange={(r) => dispatch(setChartRange(r))}
+                tabHealth={{ performance: foxIsError ? 'error' : foxmemory ? 'ok' : undefined }}
               />
             )}
           </Container>
