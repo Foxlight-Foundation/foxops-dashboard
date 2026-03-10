@@ -490,6 +490,16 @@ app.get('/api/crons/:id/runs', async (req: Request, res: Response) => {
   }
 });
 
+app.post('/api/crons/:id/run', async (req: Request, res: Response) => {
+  const { id } = req.params;
+  try {
+    const payload = await gatewayCall<{ ok?: boolean; ran?: boolean; reason?: string }>('cron.run', { id }, 60_000);
+    res.json({ ok: true, ran: payload.ran ?? false, reason: payload.reason ?? null });
+  } catch (e: unknown) {
+    res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e) });
+  }
+});
+
 app.get('/api/foxmemory/prompts', async (_req: Request, res: Response) => {
   try {
     type PromptData = { data?: { prompt: string | null; effective_prompt: string | null; source: string; persisted: boolean } };

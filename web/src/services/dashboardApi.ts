@@ -79,6 +79,10 @@ export const dashboardApi = createApi({
     getCronRuns: builder.query<CronRunsResponse, { id: string; limit?: number }>({
       query: ({ id, limit = 20 }) => `/crons/${id}/runs?limit=${limit}`,
     }),
+    runCronJob: builder.mutation<{ ok: boolean; ran: boolean; reason: string | null }, string>({
+      query: (id) => ({ url: `/crons/${id}/run`, method: 'POST' }),
+      invalidatesTags: ['Crons'],
+    }),
     killSession: builder.mutation<KillResponse, KillArgs>({
       query: ({ sessionKey, sessionId, reason }) => ({
         url: '/sessions/kill',
@@ -118,6 +122,7 @@ export const {
   useSearchFoxmemoryMemoriesMutation,
   useGetCronsQuery,
   useGetCronRunsQuery,
+  useRunCronJobMutation,
   useKillSessionMutation,
   useDeleteSessionMutation,
 } = dashboardApi;

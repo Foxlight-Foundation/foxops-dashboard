@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import {
   Box,
+  Button,
   Chip,
   CircularProgress,
   Collapse,
@@ -23,9 +24,10 @@ import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import MemoryRoundedIcon from '@mui/icons-material/MemoryRounded';
+import PlayArrowRoundedIcon from '@mui/icons-material/PlayArrowRounded';
 import StatCard from '../StatCard/StatCard';
 import { MonoTableCell, grad } from '../shared/styled';
-import { useGetCronRunsQuery } from '../../services/dashboardApi';
+import { useGetCronRunsQuery, useRunCronJobMutation } from '../../services/dashboardApi';
 import type { CronJobsSectionProps } from './CronJobsSection.types';
 import type { CronJob, CronRunEntry } from '../../types';
 
@@ -109,6 +111,46 @@ const CronRunHistory = ({ jobId }: { jobId: string }) => {
         </TableBody>
       </Table>
     </Box>
+    </Box>
+  );
+};
+
+const RunNowButton = ({ jobId, isError }: { jobId: string; isError: boolean }) => {
+  const [runCronJob, { isLoading, error }] = useRunCronJobMutation();
+  const [lastResult, setLastResult] = useState<{ ran: boolean; reason: string | null } | null>(null);
+
+  const handleRun = async () => {
+    setLastResult(null);
+    const result = await runCronJob(jobId).unwrap().catch(() => null);
+    if (result) setLastResult({ ran: result.ran, reason: result.reason });
+  };
+
+  const resultMsg = lastResult
+    ? lastResult.ran
+      ? '✓ fired'
+      : `skipped${lastResult.reason ? ` — ${lastResult.reason}` : ''}`
+    : error
+    ? '✗ error'
+    : null;
+
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+      <Button
+        size="small"
+        variant={isError ? 'contained' : 'outlined'}
+        color={isError ? 'error' : 'primary'}
+        startIcon={isLoading ? <CircularProgress size={12} color="inherit" /> : <PlayArrowRoundedIcon fontSize="small" />}
+        disabled={isLoading}
+        onClick={handleRun}
+        sx={{ fontSize: 12, py: 0.4 }}
+      >
+        Run now
+      </Button>
+      {resultMsg && (
+        <Typography variant="caption" sx={{ color: lastResult?.ran ? 'success.main' : 'text.secondary' }}>
+          {resultMsg}
+        </Typography>
+      )}
     </Box>
   );
 };
@@ -247,6 +289,11 @@ const CronJobsSection = ({ jobs }: CronJobsSectionProps) => {
                             </Typography>
                           </Box>
                         </Box>
+                        {job.enabled && (
+                          <Box sx={{ px: 2, pt: 0.5, pb: 0 }}>
+                            <RunNowButton jobId={job.id} isError={lastStatus === 'error'} />
+                          </Box>
+                        )}
                         <Divider sx={{ mt: 1.5, mb: 1 }} />
                         <Box sx={{ px: 2, pb: 1.5 }}>
                           <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', mb: 0.5 }}>

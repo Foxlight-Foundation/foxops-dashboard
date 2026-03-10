@@ -83,6 +83,7 @@ const connect = (): Promise<WebSocket> =>
 export const gatewayCall = async <T = unknown>(
   method: string,
   params: Record<string, unknown> = {},
+  timeoutMs: number = CALL_TIMEOUT_MS,
 ): Promise<T> => {
   const ws = await connect();
 
@@ -91,7 +92,7 @@ export const gatewayCall = async <T = unknown>(
     const timeout = setTimeout(() => {
       ws.terminate();
       reject(new Error(`Gateway call timed out: ${method}`));
-    }, CALL_TIMEOUT_MS);
+    }, timeoutMs);
 
     ws.on('message', (raw) => {
       const msg = JSON.parse(raw.toString()) as GatewayMessage;

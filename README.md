@@ -18,7 +18,7 @@ FoxOps Dashboard gives you one. It's a read-mostly operational panel — like a 
 Live view of every active openclaw session across all agents. Shows model, token usage, context window fill, age, and whether the last run aborted cleanly. You can delete or send a kill request to any non-main session directly from the UI.
 
 ### Cron Jobs
-All scheduled cron jobs with their status, schedule, last run time, duration, next run, and consecutive error count. Expand any job to see its full configuration and a run history table (last 10 runs with per-run token usage, duration, status, and error detail).
+All scheduled cron jobs with their status, schedule, last run time, duration, next run, and consecutive error count. Expand any job to see its full configuration and a run history table (last 10 runs with per-run token usage, duration, status, and error detail). Enabled jobs have a **Run now** button — useful for re-firing a job stuck in an error state without waiting for its next scheduled run.
 
 ### FoxMemory
 Live stats from the FoxMemory memory store: total memory count, write activity by day (30-day chart), memory event breakdown (adds/updates/deletes), search quality stats, recent write activity feed, and Neo4j graph health. Includes a graph explorer — force-directed visualization of the memory knowledge graph — and a prompt editor for tuning extraction, update, and graph prompts live.
