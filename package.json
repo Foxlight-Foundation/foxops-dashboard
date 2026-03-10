@@ -8,6 +8,7 @@
     "dev:api": "tsx server/index.ts",
     "start": "concurrently -k -n api,web \"npm:dev:api\" \"npm:dev:web\"",
     "build:web": "vite build --config web/vite.config.ts",
+    "build:server": "tsc -p server/tsconfig.json",
     "start:api": "NODE_ENV=production tsx server/index.ts",
     "typecheck:web": "tsc -p web/tsconfig.json --noEmit",
     "typecheck:server": "tsc -p server/tsconfig.json --noEmit",
