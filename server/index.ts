@@ -491,6 +491,22 @@ app.get('/api/crons', (_req: Request, res: Response) => {
   }
 });
 
+app.get('/api/crons/:id/runs', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const limit = req.query.limit ? String(req.query.limit) : '20';
+  try {
+    const raw = execFileSync('openclaw', ['cron', 'runs', '--id', id, '--limit', limit], {
+      encoding: 'utf8',
+    });
+    const jsonStart = raw.indexOf('{');
+    const jsonStr = jsonStart >= 0 ? raw.slice(jsonStart) : raw;
+    const parsed = JSON.parse(jsonStr) as { entries?: unknown[]; total?: number; hasMore?: boolean };
+    res.json({ ok: true, entries: parsed.entries || [], total: parsed.total ?? 0, hasMore: parsed.hasMore ?? false });
+  } catch (e: unknown) {
+    res.status(500).json({ ok: false, error: e instanceof Error ? e.message : String(e), entries: [] });
+  }
+});
+
 app.get('/api/foxmemory/prompts', async (_req: Request, res: Response) => {
   try {
     type PromptData = { data?: { prompt: string | null; effective_prompt: string | null; source: string; persisted: boolean } };

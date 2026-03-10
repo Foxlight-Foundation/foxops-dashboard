@@ -1,5 +1,5 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { SessionsResponse, FoxmemoryResponse, FoxmemoryPromptsResponse, FoxmemoryGraphStats, FoxmemoryGraphData, FoxmemoryGraphSearchResult, FoxmemoryMemorySearchResult, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse, CronJobsResponse, FoxmemoryModelsResponse, FoxmemoryCatalogResponse, ModelRoleKey, CatalogModel } from '../types';
+import type { SessionsResponse, FoxmemoryResponse, FoxmemoryPromptsResponse, FoxmemoryGraphStats, FoxmemoryGraphData, FoxmemoryGraphSearchResult, FoxmemoryMemorySearchResult, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse, CronJobsResponse, CronRunsResponse, FoxmemoryModelsResponse, FoxmemoryCatalogResponse, ModelRoleKey, CatalogModel } from '../types';
 
 export const dashboardApi = createApi({
   reducerPath: 'dashboardApi',
@@ -76,6 +76,9 @@ export const dashboardApi = createApi({
       query: () => '/crons',
       providesTags: ['Crons'],
     }),
+    getCronRuns: builder.query<CronRunsResponse, { id: string; limit?: number }>({
+      query: ({ id, limit = 20 }) => `/crons/${id}/runs?limit=${limit}`,
+    }),
     killSession: builder.mutation<KillResponse, KillArgs>({
       query: ({ sessionKey, sessionId, reason }) => ({
         url: '/sessions/kill',
@@ -114,6 +117,7 @@ export const {
   useSearchFoxmemoryGraphMutation,
   useSearchFoxmemoryMemoriesMutation,
   useGetCronsQuery,
+  useGetCronRunsQuery,
   useKillSessionMutation,
   useDeleteSessionMutation,
 } = dashboardApi;

@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import {
   Box,
   Chip,
+  CircularProgress,
   Collapse,
+  Divider,
   Grid,
   IconButton,
   Table,
@@ -17,13 +19,15 @@ import {
 import { GlassPaper } from '../shared/styled';
 import AccessAlarmRoundedIcon from '@mui/icons-material/AccessAlarmRounded';
 import CheckCircleRoundedIcon from '@mui/icons-material/CheckCircleRounded';
+import ErrorRoundedIcon from '@mui/icons-material/ErrorRounded';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import MemoryRoundedIcon from '@mui/icons-material/MemoryRounded';
 import StatCard from '../StatCard/StatCard';
 import { MonoTableCell, grad } from '../shared/styled';
+import { useGetCronRunsQuery } from '../../services/dashboardApi';
 import type { CronJobsSectionProps } from './CronJobsSection.types';
-import type { CronJob } from '../../types';
+import type { CronJob, CronRunEntry } from '../../types';
 
 const fmtMs = (ms?: number | null) => {
   if (ms == null) return '—';
@@ -55,8 +59,67 @@ const fmtSchedule = (job: CronJob) => {
   return s.kind ?? '—';
 };
 
+const runStatusColor = (status: string) =>
+  status === 'ok' ? 'success' : status === 'error' ? 'error' : 'default';
+
+const CronRunHistory = ({ jobId }: { jobId: string }) => {
+  const { data, isLoading } = useGetCronRunsQuery({ id: jobId, limit: 10 }, { refetchOnMountOrArgChange: true });
+
+  if (isLoading) return <Box sx={{ py: 1, display: 'flex', alignItems: 'center', gap: 1 }}><CircularProgress size={12} /><Typography variant="caption" color="text.secondary">Loading run history…</Typography></Box>;
+  if (!data?.entries.length) return <Typography variant="caption" color="text.secondary">No run history available.</Typography>;
+
+  return (
+    <Box>
+      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+        {data.total.toLocaleString()} total runs · showing last {data.entries.length}
+      </Typography>
+    <Box sx={{ overflowX: 'auto' }}>
+      <Table size="small">
+        <TableHead>
+          <TableRow>
+            <TableCell sx={{ fontSize: 11, py: 0.5 }}>Status</TableCell>
+            <TableCell sx={{ fontSize: 11, py: 0.5 }}>Ran at</TableCell>
+            <TableCell sx={{ fontSize: 11, py: 0.5 }}>Duration</TableCell>
+            <TableCell sx={{ fontSize: 11, py: 0.5 }}>Summary / Error</TableCell>
+            <TableCell sx={{ fontSize: 11, py: 0.5 }}>Tokens</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {data.entries.map((entry: CronRunEntry) => (
+            <TableRow key={entry.ts}>
+              <TableCell sx={{ py: 0.5 }}>
+                <Chip size="small" label={entry.status} color={runStatusColor(entry.status) as 'success' | 'error' | 'default'} sx={{ fontSize: 10, height: 18 }} />
+              </TableCell>
+              <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 11, whiteSpace: 'nowrap' }}>
+                {new Date(entry.runAtMs).toLocaleString()}
+              </TableCell>
+              <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 11 }}>
+                {fmtMs(entry.durationMs)}
+              </TableCell>
+              <TableCell sx={{ py: 0.5, fontSize: 11, color: entry.error ? 'error.main' : 'text.primary', fontFamily: entry.error ? 'monospace' : undefined, maxWidth: 320, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <Tooltip title={entry.error ?? entry.summary ?? ''} arrow>
+                  <span>{entry.error ?? entry.summary ?? '—'}</span>
+                </Tooltip>
+              </TableCell>
+              <TableCell sx={{ py: 0.5, fontFamily: 'monospace', fontSize: 11 }}>
+                {entry.usage?.total_tokens != null ? entry.usage.total_tokens.toLocaleString() : '—'}
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </Box>
+    </Box>
+  );
+};
+
 const CronJobsSection = ({ jobs }: CronJobsSectionProps) => {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const erroredCount = jobs.filter((j) => {
+    const s = j.state?.lastRunStatus ?? j.state?.lastStatus;
+    return s === 'error';
+  }).length;
 
   return (
     <>
@@ -69,6 +132,14 @@ const CronJobsSection = ({ jobs }: CronJobsSectionProps) => {
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <StatCard title="disabled" value={jobs.filter((j) => !j.enabled).length} icon={<MemoryRoundedIcon fontSize="small" />} iconColor={grad('#8898aa', '#6c7a8d')} />
+        </Grid>
+        <Grid item xs={12} sm={6} md={3}>
+          <StatCard
+            title="errored"
+            value={erroredCount}
+            icon={<ErrorRoundedIcon fontSize="small" />}
+            iconColor={erroredCount > 0 ? grad('#f5365c', '#f56036') : grad('#2dce89', '#2dbd5a')}
+          />
         </Grid>
       </Grid>
 
@@ -136,6 +207,14 @@ const CronJobsSection = ({ jobs }: CronJobsSectionProps) => {
                             <Typography variant="body2">{job.agentId}</Typography>
                           </Box>
                           <Box>
+                            <Typography variant="caption" color="text.secondary" display="block">Created</Typography>
+                            <Typography variant="body2">{job.createdAtMs ? `${new Date(job.createdAtMs as number).toLocaleString()} (${fmtAge(now - (job.createdAtMs as number))})` : '—'}</Typography>
+                          </Box>
+                          <Box>
+                            <Typography variant="caption" color="text.secondary" display="block">Last updated</Typography>
+                            <Typography variant="body2">{job.updatedAtMs ? `${fmtAge(now - (job.updatedAtMs as number))}` : '—'}</Typography>
+                          </Box>
+                          <Box>
                             <Typography variant="caption" color="text.secondary" display="block">Session target</Typography>
                             <Typography variant="body2">{job.sessionTarget ?? '—'}</Typography>
                           </Box>
@@ -153,12 +232,27 @@ const CronJobsSection = ({ jobs }: CronJobsSectionProps) => {
                             <Typography variant="caption" color="text.secondary" display="block">Last delivery</Typography>
                             <Typography variant="body2">{job.state?.lastDeliveryStatus ?? '—'}</Typography>
                           </Box>
+                          {job.state?.lastError && (
+                            <Box sx={{ gridColumn: '1 / -1' }}>
+                              <Typography variant="caption" color="error" display="block" fontWeight={600}>Last error</Typography>
+                              <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 12, color: 'error.main', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                                {job.state.lastError}
+                              </Typography>
+                            </Box>
+                          )}
                           <Box sx={{ gridColumn: '1 / -1' }}>
                             <Typography variant="caption" color="text.secondary" display="block">Payload message</Typography>
                             <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: 12, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
                               {job.payload?.message ?? '—'}
                             </Typography>
                           </Box>
+                        </Box>
+                        <Divider sx={{ mt: 1.5, mb: 1 }} />
+                        <Box sx={{ px: 2, pb: 1.5 }}>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600} sx={{ textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', mb: 0.5 }}>
+                            Run history (last 10)
+                          </Typography>
+                          <CronRunHistory jobId={job.id} />
                         </Box>
                       </Collapse>
                     </TableCell>

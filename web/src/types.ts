@@ -195,6 +195,7 @@ export interface CronJobState {
   lastDelivered?: boolean | null;
   lastDeliveryStatus?: string | null;
   consecutiveErrors?: number;
+  lastError?: string | null;
 }
 
 export interface CronJob {
@@ -217,6 +218,33 @@ export interface CronJobsResponse {
   ok: boolean;
   jobs: CronJob[];
   total: number;
+  error?: string;
+}
+
+export interface CronRunEntry {
+  ts: number;
+  jobId: string;
+  action: string;
+  status: string;
+  error?: string | null;
+  summary?: string | null;
+  runAtMs: number;
+  durationMs?: number | null;
+  nextRunAtMs?: number | null;
+  model?: string | null;
+  provider?: string | null;
+  usage?: { input_tokens?: number; output_tokens?: number; total_tokens?: number } | null;
+  delivered?: boolean | null;
+  deliveryStatus?: string | null;
+  sessionId?: string | null;
+  sessionKey?: string | null;
+}
+
+export interface CronRunsResponse {
+  ok: boolean;
+  entries: CronRunEntry[];
+  total: number;
+  hasMore: boolean;
   error?: string;
 }
 
