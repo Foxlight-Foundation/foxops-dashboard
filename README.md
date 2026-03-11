@@ -6,7 +6,7 @@ An operational dashboard for monitoring [openclaw](https://openclaw.ai) AI agent
 
 ## What is this?
 
-If you're running an autonomous AI agent (like Kite) on top of openclaw, you have a bunch of things running in the background at all times: agent sessions talking to LLMs, scheduled cron jobs firing on timers, a memory system ingesting and organizing information. There's no built-in web UI for any of that.
+If you're running an autonomous AI agent (like a lantern fox) on top of openclaw, you have a bunch of things running in the background at all times: agent sessions talking to LLMs, scheduled cron jobs firing on timers, a memory system ingesting and organizing information. There's no built-in web UI for any of that.
 
 FoxOps Dashboard gives you one. It's a read-mostly operational panel — like a cockpit — that lets you see what's running, what's healthy, and what's broken, at a glance.
 
