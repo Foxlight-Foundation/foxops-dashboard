@@ -1,4 +1,4 @@
-# FoxOps Dashboard
+# FoxOps
 
 An operational dashboard for monitoring [openclaw](https://openclaw.ai) AI agent sessions, cron jobs, and [FoxMemory](https://github.com/Foxlight-Foundation/foxmemory-store) health — built by [Foxlight Imagineering](https://github.com/Foxlight-Foundation).
 
