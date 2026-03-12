@@ -295,7 +295,7 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange, tabHealth
                       </TableCell>
                       <TableCell sx={{ py: 0.75, fontSize: 11 }}>{entry.inferMode ? 'infer' : 'raw'}</TableCell>
                       <TableCell sx={{ py: 0.75, fontSize: 11, fontFamily: 'monospace' }}>{fmtMs(entry.latencyMs)}</TableCell>
-                      <TableCell sx={{ py: 0.75, fontSize: 11, fontFamily: 'monospace' }}>{entry.memoryId.slice(0, 8)}</TableCell>
+                      <TableCell sx={{ py: 0.75, fontSize: 11, fontFamily: 'monospace' }}>{entry.memoryId ? entry.memoryId.slice(0, 8) : '—'}</TableCell>
                       <TableCell sx={{ py: 0.75, fontSize: 11 }}>{date}</TableCell>
                       <TableCell sx={{ py: 0.75, width: 24 }}>
                         <ExpandMoreRoundedIcon sx={{ fontSize: 16, color: 'text.secondary', transition: 'transform 0.2s', transform: expandedRows.has(i) ? 'rotate(180deg)' : 'rotate(0deg)' }} />

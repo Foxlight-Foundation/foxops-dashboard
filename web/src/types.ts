@@ -46,7 +46,7 @@ export interface MemoryDayEntry {
 export interface MemoryActivityEntry {
   ts: string;
   event: string;
-  memoryId: string;
+  memoryId: string | null;
   userId?: string;
   runId?: string;
   preview?: string;
