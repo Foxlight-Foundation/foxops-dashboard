@@ -190,15 +190,23 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
   }
 
   // Analytics from /v2/stats/memories?days=30 + /v2/write-events (richer recent activity)
+  //
+  // We fetch up to 200 write-events and then filter out no-op entries (event_type === "NONE")
+  // before taking the 20 most recent. No-op events are produced when the upstream memory stack
+  // evaluates a message but decides nothing is worth storing — they carry no memory_id and no
+  // useful data for the dashboard's Recent Activity view. Over-fetching 200 ensures we still
+  // surface ~20 meaningful events even when the no-op ratio is high (observed at ~60%).
   let memoriesByDay: MemoryDayEntry[] = [];
   let memorySummary: MemorySummary | null = null;
   let recentActivity: MemoryActivityEntry[] = [];
   let searches: MemorySearchStats | null = null;
   let analyticsCount = 0;
+  const WRITE_EVENTS_FETCH_LIMIT = 200; // over-fetch to compensate for filtered no-ops
+  const RECENT_ACTIVITY_DISPLAY_LIMIT = 20;
   try {
     const [memStatsRes, writeEventsRes] = await Promise.all([
       fetch(`${foxmemoryBaseUrl}/v2/stats/memories?days=30`, { method: 'GET' }),
-      fetch(`${foxmemoryBaseUrl}/v2/write-events?limit=20`, { method: 'GET' }),
+      fetch(`${foxmemoryBaseUrl}/v2/write-events?limit=${WRITE_EVENTS_FETCH_LIMIT}`, { method: 'GET' }),
     ]);
     if (memStatsRes.ok) {
       const json = (await memStatsRes.json()) as {
@@ -235,20 +243,29 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
           }>;
         };
       };
-      recentActivity = (json?.data?.events ?? []).map((e) => ({
-        ts: e.ts,
-        event: e.event_type,
-        memoryId: e.memory_id,
-        userId: e.user_id ?? undefined,
-        runId: e.run_id ?? undefined,
-        preview: e.memory_text,
-        memoryText: e.memory_text,
-        reason: e.reason,
-        extractedFacts: e.extracted_facts,
-        callId: e.call_id,
-        latencyMs: e.latency_ms,
-        inferMode: e.infer_mode,
-      }));
+      // Filter out no-op events (event_type "NONE") — these are discarded evaluations where
+      // the memory stack decided the input contained nothing worth persisting. They have no
+      // memory_id, no memory_text, and no actionable data. We exclude them so the Recent
+      // Activity table only shows real writes (ADD, UPDATE, DELETE).
+      const meaningfulEvents = (json?.data?.events ?? [])
+        .filter((e) => e.event_type !== 'NONE');
+
+      recentActivity = meaningfulEvents
+        .slice(0, RECENT_ACTIVITY_DISPLAY_LIMIT)
+        .map((e) => ({
+          ts: e.ts,
+          event: e.event_type,
+          memoryId: e.memory_id,
+          userId: e.user_id ?? undefined,
+          runId: e.run_id ?? undefined,
+          preview: e.memory_text,
+          memoryText: e.memory_text,
+          reason: e.reason,
+          extractedFacts: e.extracted_facts,
+          callId: e.call_id,
+          latencyMs: e.latency_ms,
+          inferMode: e.infer_mode,
+        }));
     }
   } catch {
     // optional
