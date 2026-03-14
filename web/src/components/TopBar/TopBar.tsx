@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { AppBar, Avatar, Box, Chip, Divider, IconButton, LinearProgress, Toolbar, Tooltip, Typography } from '@mui/material';
 import { alpha, styled } from '@mui/material/styles';
 import BabyFoxIcon from '../shared/BabyFoxIcon';
@@ -6,6 +7,7 @@ import LightModeIcon from '@mui/icons-material/LightMode';
 import DarkModeIcon from '@mui/icons-material/DarkMode';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import AccountCircleRoundedIcon from '@mui/icons-material/AccountCircleRounded';
+import RolesPopover from './RolesPopover';
 import type { TopBarProps } from './TopBar.types';
 
 const GlassAppBar = styled(AppBar)(({ theme }) => ({
@@ -37,6 +39,8 @@ const TopBar = ({
   onToggleMode,
   onLogout,
 }: TopBarProps) => {
+  const [rolesAnchorEl, setRolesAnchorEl] = useState<HTMLElement | null>(null);
+
   const subtitle =
     section === 'acp'
       ? `${sessionCount} sessions`
@@ -77,13 +81,16 @@ const TopBar = ({
             </IconButton>
           </Tooltip>
           {user && (
-            <Tooltip title={`Signed in as ${user.email}`} arrow>
-              <IconButton color="primary">
-                {user.picture
-                  ? <Avatar src={user.picture} alt={user.name} sx={{ width: 24, height: 24 }} />
-                  : <AccountCircleRoundedIcon />}
-              </IconButton>
-            </Tooltip>
+            <>
+              <Tooltip title={`Signed in as ${user.email}`} arrow>
+                <IconButton color="primary" onClick={(e) => setRolesAnchorEl(e.currentTarget)}>
+                  {user.picture
+                    ? <Avatar src={user.picture} alt={user.name} sx={{ width: 24, height: 24 }} />
+                    : <AccountCircleRoundedIcon />}
+                </IconButton>
+              </Tooltip>
+              <RolesPopover anchorEl={rolesAnchorEl} onClose={() => setRolesAnchorEl(null)} />
+            </>
           )}
           <Tooltip title="Sign out" arrow>
             <IconButton color="primary" onClick={onLogout}>

@@ -1,10 +1,10 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { SessionsResponse, FoxmemoryResponse, FoxmemoryPromptsResponse, FoxmemoryGraphStats, FoxmemoryGraphData, FoxmemoryGraphSearchResult, FoxmemoryMemorySearchResult, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse, CronJobsResponse, CronRunsResponse, FoxmemoryModelsResponse, FoxmemoryCatalogResponse, ModelRoleKey, CatalogModel, CaptureConfigResponse } from '../types';
+import type { SessionsResponse, FoxmemoryResponse, FoxmemoryPromptsResponse, FoxmemoryGraphStats, FoxmemoryGraphData, FoxmemoryGraphSearchResult, FoxmemoryMemorySearchResult, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse, CronJobsResponse, CronRunsResponse, FoxmemoryModelsResponse, FoxmemoryCatalogResponse, ModelRoleKey, CatalogModel, CaptureConfigResponse, RolesConfigResponse } from '../types';
 
 export const dashboardApi = createApi({
   reducerPath: 'dashboardApi',
   baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
-  tagTypes: ['Sessions', 'Foxmemory', 'Crons', 'FoxmemoryPrompts', 'FoxmemoryGraph', 'FoxmemoryModels', 'FoxmemoryCapture'],
+  tagTypes: ['Sessions', 'Foxmemory', 'Crons', 'FoxmemoryPrompts', 'FoxmemoryGraph', 'FoxmemoryModels', 'FoxmemoryCapture', 'FoxmemoryRoles'],
   endpoints: (builder) => ({
     getSessions: builder.query<SessionsResponse, void>({
       query: () => '/sessions',
@@ -65,6 +65,18 @@ export const dashboardApi = createApi({
     revertCaptureConfig: builder.mutation<CaptureConfigResponse, void>({
       query: () => ({ url: '/foxmemory/config/capture', method: 'DELETE' }),
       invalidatesTags: ['FoxmemoryCapture'],
+    }),
+    getRolesConfig: builder.query<RolesConfigResponse, void>({
+      query: () => '/foxmemory/config/roles',
+      providesTags: ['FoxmemoryRoles'],
+    }),
+    setRolesConfig: builder.mutation<RolesConfigResponse, { user?: string; assistant?: string }>({
+      query: (body) => ({ url: '/foxmemory/config/roles', method: 'PUT', body }),
+      invalidatesTags: ['FoxmemoryRoles'],
+    }),
+    revertRolesConfig: builder.mutation<RolesConfigResponse, void>({
+      query: () => ({ url: '/foxmemory/config/roles', method: 'DELETE' }),
+      invalidatesTags: ['FoxmemoryRoles'],
     }),
     setFoxmemoryExtractionPrompt: builder.mutation<{ ok: boolean }, { prompt: string | null }>({
       query: (body) => ({ url: '/foxmemory/config/prompt', method: 'PUT', body }),
@@ -130,6 +142,9 @@ export const {
   useGetCaptureConfigQuery,
   useSetCaptureConfigMutation,
   useRevertCaptureConfigMutation,
+  useGetRolesConfigQuery,
+  useSetRolesConfigMutation,
+  useRevertRolesConfigMutation,
   useSetFoxmemoryExtractionPromptMutation,
   useSetFoxmemoryUpdatePromptMutation,
   useSetFoxmemoryGraphPromptMutation,
