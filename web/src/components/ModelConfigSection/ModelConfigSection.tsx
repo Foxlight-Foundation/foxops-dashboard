@@ -8,6 +8,7 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import { useGetFoxmemoryModelsQuery, useGetFoxmemoryCatalogQuery, useSetFoxmemoryModelMutation, useRevertFoxmemoryModelMutation, useAddCatalogModelMutation, useUpdateCatalogModelMutation, useDeleteCatalogModelMutation } from '../../services/dashboardApi';
 import type { CatalogModel, ModelRoleKey } from '../../types';
+import type { ModelConfigSectionProps } from './ModelConfigSection.types';
 
 const fmtCost = (v?: number | null) => v == null ? '—' : `$${v.toFixed(3)}`;
 
@@ -30,9 +31,10 @@ interface ModelCardProps {
   onApply: (key: ModelRoleKey, value: string) => Promise<void>;
   onRevert: (key: ModelRoleKey) => Promise<void>;
   saving: boolean;
+  disabled?: boolean;
 }
 
-const ModelCard = ({ title, icon, roleKey, role, currentValue, source, catalogModel, catalog, onApply, onRevert, saving }: ModelCardProps) => {
+const ModelCard = ({ title, icon, roleKey, role, currentValue, source, catalogModel, catalog, onApply, onRevert, saving, disabled = false }: ModelCardProps) => {
   const eligible = catalog.filter((m) => m.roles.includes(role));
   const [selected, setSelected] = useState(
     eligible.find((m) => m.id === currentValue)?.id ?? (eligible[0]?.id ?? '')
@@ -147,7 +149,7 @@ const ModelCard = ({ title, icon, roleKey, role, currentValue, source, catalogMo
             <Button
               variant="contained"
               size="small"
-              disabled={!isDirty || saving}
+              disabled={!isDirty || saving || disabled}
               onClick={() => setConfirming(true)}
               sx={{
                 flex: 1,
@@ -166,7 +168,7 @@ const ModelCard = ({ title, icon, roleKey, role, currentValue, source, catalogMo
               <Button
                 variant="outlined"
                 size="small"
-                disabled={saving}
+                disabled={saving || disabled}
                 onClick={() => onRevert(roleKey)}
                 sx={{ fontSize: 12, fontWeight: 600, textTransform: 'none', borderColor: 'rgba(0,0,0,0.2)', color: 'text.secondary' }}
               >
@@ -253,7 +255,7 @@ const CatalogForm = ({ initial, isNew, saving, onSave, onCancel }: CatalogFormPr
   );
 };
 
-const ModelConfigSection = () => {
+const ModelConfigSection = ({ canEdit = true }: ModelConfigSectionProps) => {
   const { data: modelsData, isLoading: modelsLoading } = useGetFoxmemoryModelsQuery();
   const { data: catalogData, isLoading: catalogLoading } = useGetFoxmemoryCatalogQuery();
   const [setModel] = useSetFoxmemoryModelMutation();
@@ -344,6 +346,7 @@ const ModelConfigSection = () => {
             onApply={handleApply}
             onRevert={handleRevert}
             saving={savingKey === 'llm_model'}
+            disabled={!canEdit}
           />
           <ModelCard
             title="Graph Model"
@@ -357,6 +360,7 @@ const ModelConfigSection = () => {
             onApply={handleApply}
             onRevert={handleRevert}
             saving={savingKey === 'graph_llm_model'}
+            disabled={!canEdit}
           />
         </Box>
       )}
@@ -370,7 +374,7 @@ const ModelConfigSection = () => {
           <IconButton
             size="small"
             onClick={() => { setAddingNew(true); setEditingId(null); setDeletingId(null); }}
-            disabled={addingNew}
+            disabled={addingNew || !canEdit}
             sx={{ ml: 1, width: 24, height: 24, background: 'linear-gradient(45deg, #1a3fc4 0%, #6690f5 100%)', color: '#fff', boxShadow: '0 2px 6px rgba(30,60,200,0.35)', '&:hover': { background: 'linear-gradient(45deg, #1a3fc4 0%, #6690f5 100%)' }, '&.Mui-disabled': { background: 'rgba(0,0,0,0.08)', color: 'rgba(0,0,0,0.26)', boxShadow: 'none' } }}
           >
             <AddRoundedIcon sx={{ fontSize: 16 }} />
@@ -442,12 +446,12 @@ const ModelConfigSection = () => {
                             <Typography variant="caption" sx={{ fontSize: 10, fontFamily: 'monospace', fontWeight: 600 }}>{fmtCost(m.output_mtok)}</Typography>
                           </Box>
                           <Box sx={{ display: 'flex', gap: 0.5, ml: 1 }}>
-                            <IconButton size="small" onClick={() => { setEditingId(m.id); setDeletingId(null); setAddingNew(false); }}
-                              sx={{ width: 24, height: 24, background: 'linear-gradient(45deg, #1a3fc4 0%, #6690f5 100%)', color: '#fff', boxShadow: '0 2px 6px rgba(30,60,200,0.35)', '&:hover': { background: 'linear-gradient(45deg, #1a3fc4 0%, #6690f5 100%)' } }}>
+                            <IconButton size="small" disabled={!canEdit} onClick={() => { setEditingId(m.id); setDeletingId(null); setAddingNew(false); }}
+                              sx={{ width: 24, height: 24, background: 'linear-gradient(45deg, #1a3fc4 0%, #6690f5 100%)', color: '#fff', boxShadow: '0 2px 6px rgba(30,60,200,0.35)', '&:hover': { background: 'linear-gradient(45deg, #1a3fc4 0%, #6690f5 100%)' }, '&.Mui-disabled': { background: 'rgba(0,0,0,0.08)', color: 'rgba(0,0,0,0.26)', boxShadow: 'none' } }}>
                               <EditRoundedIcon sx={{ fontSize: 13 }} />
                             </IconButton>
-                            <IconButton size="small" onClick={() => { setDeletingId(m.id); setEditingId(null); }}
-                              sx={{ width: 24, height: 24, bgcolor: '#f5365c', color: '#fff', boxShadow: '0 2px 6px rgba(245,54,92,0.4)', '&:hover': { bgcolor: '#d42e51' } }}>
+                            <IconButton size="small" disabled={!canEdit} onClick={() => { setDeletingId(m.id); setEditingId(null); }}
+                              sx={{ width: 24, height: 24, bgcolor: '#f5365c', color: '#fff', boxShadow: '0 2px 6px rgba(245,54,92,0.4)', '&:hover': { bgcolor: '#d42e51' }, '&.Mui-disabled': { bgcolor: 'rgba(0,0,0,0.08)', color: 'rgba(0,0,0,0.26)', boxShadow: 'none' } }}>
                               <DeleteOutlineRoundedIcon sx={{ fontSize: 13 }} />
                             </IconButton>
                           </Box>

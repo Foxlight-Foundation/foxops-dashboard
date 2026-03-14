@@ -21,6 +21,7 @@ import ModelConfigSection from './components/ModelConfigSection/ModelConfigSecti
 import LoginView from './components/LoginView/LoginView';
 import MfaView from './components/MfaView/MfaView';
 import SeatedFoxIcon from './components/shared/SeatedFoxIcon';
+import { useRbac } from './hooks/useRbac';
 
 const AppShell = styled(Box, { shouldForwardProp: (p) => p !== 'mode' })<{ mode: 'light' | 'dark' }>(({ mode }) => ({
   position: 'relative',
@@ -115,6 +116,7 @@ const App = () => {
 
   const [killSession, { isLoading: killLoading }] = useKillSessionMutation();
   const [deleteSession, { isLoading: deleteLoading }] = useDeleteSessionMutation();
+  const { canEdit } = useRbac();
 
   const cardShadow = mode === 'dark'
     ? '0 2px 8px rgba(0,0,0,0.3), 0 10px 28px rgba(0,0,0,0.4)'
@@ -267,13 +269,14 @@ const App = () => {
                 onDelete={onDelete}
               />
             ) : section === 'config' ? (
-              <ModelConfigSection />
+              <ModelConfigSection canEdit={canEdit} />
             ) : (
               <FoxMemorySection
                 foxmemory={foxmemory}
                 chartRange={chartRange}
                 onChartRangeChange={(r) => dispatch(setChartRange(r))}
                 tabHealth={{ performance: foxIsError ? 'error' : foxmemory ? 'ok' : undefined }}
+                canEdit={canEdit}
               />
             )}
           </Container>

@@ -53,7 +53,7 @@ const TabLabel = ({ label, health }: { label: string; health?: import('../../typ
   </Box>
 );
 
-const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange, tabHealth }: FoxMemorySectionProps) => {
+const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange, tabHealth, canEdit = true }: FoxMemorySectionProps) => {
   const [subView, setSubView] = useState<SubView>('performance');
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const toggleRow = (i: number) => setExpandedRows((prev) => {
@@ -120,6 +120,7 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange, tabHealth
           onSaveExtractionPrompt={onSaveExtractionPrompt}
           onSaveUpdatePrompt={onSaveUpdatePrompt}
           onSaveGraphPrompt={onSaveGraphPrompt}
+          canEdit={canEdit}
         />
       ) : (
       <>

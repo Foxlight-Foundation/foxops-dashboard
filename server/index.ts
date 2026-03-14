@@ -14,6 +14,7 @@ import QRCode from 'qrcode';
 import {
   findUserById, findUserByEmail, findUserByGoogleId,
   createUser, linkGoogleId, setMfaSecret, verifyPassword, seedAdminUser, insertKillLog,
+  getMembershipsByUserId, getMembershipsByTenant, addTenantMembership, updateTenantMembership, removeTenantMembership,
 } from './db.js';
 
 // ── Session type augmentation ───────────────────────────────────────────────
@@ -449,6 +450,13 @@ app.post('/api/auth/mfa/verify', (req: Request<Record<string, never>, unknown, {
   return res.json({ ok: true });
 });
 
+app.get('/api/auth/roles', (req: Request, res: Response) => {
+  if (!req.isAuthenticated()) return res.status(401).json({ ok: false, error: 'Unauthenticated' });
+  const user = req.user!;
+  const memberships = getMembershipsByUserId(user.id);
+  return res.json({ ok: true, data: memberships.map((m) => ({ tenant_id: m.tenant_id, role: m.role })) });
+});
+
 // ── Auth guard — all /api/* routes below require authentication ─────────────
 const isAuthenticated = (req: Request, res: Response, next: NextFunction) => {
   if (req.isAuthenticated()) return next();
@@ -459,6 +467,31 @@ const requireMfa = (req: Request, res: Response, next: NextFunction) => {
   if (req.session.mfaVerified) return next();
   return res.status(403).json({ ok: false, error: 'MFA verification required' });
 };
+
+const requireRole = (...roles: string[]) => async (req: Request, res: Response, next: NextFunction) => {
+  const user = req.user as Express.User | undefined;
+  if (!user) return res.status(401).json({ error: 'Not authenticated' });
+
+  // Check if user has any of the required roles in any tenant
+  const memberships = getMembershipsByUserId(user.id);
+
+  // If no memberships exist (pre-migration / fresh install), allow access for backward compat
+  if (memberships.length === 0) return next();
+
+  const hasRole = memberships.some((m) => roles.includes(m.role));
+  if (!hasRole) {
+    return res.status(403).json({ error: 'Insufficient permissions' });
+  }
+
+  return next();
+};
+
+// Convenience: require operator or above (owner, admin, operator)
+const requireOperator = requireRole('owner', 'admin', 'operator');
+// Convenience: require admin or above (owner, admin)
+const requireAdmin = requireRole('owner', 'admin');
+// Convenience: require owner
+const requireOwner = requireRole('owner');
 
 app.use('/api', isAuthenticated);
 
@@ -537,7 +570,7 @@ app.get('/api/foxmemory/prompts', async (_req: Request, res: Response) => {
   }
 });
 
-app.put('/api/foxmemory/config/prompt', async (req: Request<Record<string, never>, unknown, { prompt: string | null }>, res: Response) => {
+app.put('/api/foxmemory/config/prompt', requireAdmin, async (req: Request<Record<string, never>, unknown, { prompt: string | null }>, res: Response) => {
   try {
     const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/prompt`, {
       method: 'PUT',
@@ -551,7 +584,7 @@ app.put('/api/foxmemory/config/prompt', async (req: Request<Record<string, never
   }
 });
 
-app.put('/api/foxmemory/config/update-prompt', async (req: Request<Record<string, never>, unknown, { prompt: string | null }>, res: Response) => {
+app.put('/api/foxmemory/config/update-prompt', requireAdmin, async (req: Request<Record<string, never>, unknown, { prompt: string | null }>, res: Response) => {
   try {
     const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/update-prompt`, {
       method: 'PUT',
@@ -565,7 +598,7 @@ app.put('/api/foxmemory/config/update-prompt', async (req: Request<Record<string
   }
 });
 
-app.put('/api/foxmemory/config/graph-prompt', async (req: Request<Record<string, never>, unknown, { prompt: string | null }>, res: Response) => {
+app.put('/api/foxmemory/config/graph-prompt', requireAdmin, async (req: Request<Record<string, never>, unknown, { prompt: string | null }>, res: Response) => {
   try {
     const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/graph-prompt`, {
       method: 'PUT',
@@ -671,7 +704,7 @@ app.get('/api/foxmemory/config/models', async (_req: Request, res: Response) => 
   }
 });
 
-app.put('/api/foxmemory/config/model', requireMfa, async (req: Request<Record<string, never>, unknown, { key: string; value: string }>, res: Response) => {
+app.put('/api/foxmemory/config/model', requireMfa, requireAdmin, async (req: Request<Record<string, never>, unknown, { key: string; value: string }>, res: Response) => {
   try {
     const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/model`, {
       method: 'PUT',
@@ -685,7 +718,7 @@ app.put('/api/foxmemory/config/model', requireMfa, async (req: Request<Record<st
   }
 });
 
-app.delete('/api/foxmemory/config/model/:key', requireMfa, async (req: Request<{ key: string }>, res: Response) => {
+app.delete('/api/foxmemory/config/model/:key', requireMfa, requireAdmin, async (req: Request<{ key: string }>, res: Response) => {
   try {
     const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/model/${encodeURIComponent(req.params.key)}`, {
       method: 'DELETE',
@@ -760,7 +793,7 @@ app.get('/api/foxmemory/overview', async (_req: Request, res: Response) => {
   }
 });
 
-app.post('/api/sessions/kill', (req: Request<Record<string, never>, unknown, KillRequestBody>, res: Response) => {
+app.post('/api/sessions/kill', requireOperator, (req: Request<Record<string, never>, unknown, KillRequestBody>, res: Response) => {
   const { sessionKey, sessionId, reason } = req.body || {};
   if (!sessionKey || !sessionId) return res.status(400).json({ ok: false, error: 'sessionKey and sessionId are required' });
 
@@ -786,6 +819,42 @@ app.post('/api/sessions/delete', async (req: Request<Record<string, never>, unkn
   } catch (error: unknown) {
     return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
+});
+
+// ── Tenant membership management (require owner) ───────────────────────────
+
+const VALID_ROLES = ['owner', 'admin', 'operator', 'viewer'];
+
+app.get('/api/tenants/:tenantId/members', requireOwner, (req: Request<{ tenantId: string }>, res: Response) => {
+  const members = getMembershipsByTenant(req.params.tenantId);
+  return res.json({ ok: true, data: members });
+});
+
+app.post('/api/tenants/:tenantId/members', requireOwner, (req: Request<{ tenantId: string }, unknown, { userId: number; role: string }>, res: Response) => {
+  const { userId, role } = req.body;
+  if (!userId || !role) return res.status(400).json({ ok: false, error: 'userId and role are required' });
+  if (!VALID_ROLES.includes(role)) return res.status(400).json({ ok: false, error: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` });
+  const user = findUserById(userId);
+  if (!user) return res.status(404).json({ ok: false, error: 'User not found' });
+  try {
+    addTenantMembership(userId, req.params.tenantId, role);
+    return res.json({ ok: true });
+  } catch (error: unknown) {
+    return res.status(409).json({ ok: false, error: 'Membership already exists' });
+  }
+});
+
+app.put('/api/tenants/:tenantId/members/:userId', requireOwner, (req: Request<{ tenantId: string; userId: string }, unknown, { role: string }>, res: Response) => {
+  const { role } = req.body;
+  if (!role) return res.status(400).json({ ok: false, error: 'role is required' });
+  if (!VALID_ROLES.includes(role)) return res.status(400).json({ ok: false, error: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` });
+  updateTenantMembership(Number(req.params.userId), req.params.tenantId, role);
+  return res.json({ ok: true });
+});
+
+app.delete('/api/tenants/:tenantId/members/:userId', requireOwner, (req: Request<{ tenantId: string; userId: string }>, res: Response) => {
+  removeTenantMembership(Number(req.params.userId), req.params.tenantId);
+  return res.json({ ok: true });
 });
 
 // Serve built web app in production

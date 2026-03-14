@@ -7,4 +7,6 @@ export interface FoxMemoryAgentsViewProps {
   onSaveExtractionPrompt: (prompt: string | null) => Promise<void>;
   onSaveUpdatePrompt: (prompt: string | null) => Promise<void>;
   onSaveGraphPrompt: (prompt: string | null) => Promise<void>;
+  /** When false, prompt editing is disabled (viewer role) */
+  canEdit?: boolean;
 }
