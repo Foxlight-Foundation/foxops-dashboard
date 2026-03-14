@@ -4,4 +4,5 @@ export interface SidebarProps {
   section: Section;
   onSectionChange: (section: Section) => void;
   health?: HealthMap;
+  children?: React.ReactNode;
 }

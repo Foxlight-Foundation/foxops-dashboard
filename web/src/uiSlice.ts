@@ -5,6 +5,7 @@ export interface UiState {
   mode: ThemeMode;
   section: Section;
   chartRange: ChartRange;
+  selectedAgentId: string | null;
 }
 
 const initialState: UiState = {
@@ -14,6 +15,7 @@ const initialState: UiState = {
       : 'light',
   section: 'foxmemory',
   chartRange: '7d',
+  selectedAgentId: null,
 };
 
 const uiSlice = createSlice({
@@ -32,8 +34,11 @@ const uiSlice = createSlice({
     setChartRange(state, action: PayloadAction<ChartRange>) {
       state.chartRange = action.payload;
     },
+    setSelectedAgentId(state, action: PayloadAction<string | null>) {
+      state.selectedAgentId = action.payload;
+    },
   },
 });
 
-export const { setMode, toggleMode, setSection, setChartRange } = uiSlice.actions;
+export const { setMode, toggleMode, setSection, setChartRange, setSelectedAgentId } = uiSlice.actions;
 export default uiSlice.reducer;

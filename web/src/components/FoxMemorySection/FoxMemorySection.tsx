@@ -53,7 +53,7 @@ const TabLabel = ({ label, health }: { label: string; health?: import('../../typ
   </Box>
 );
 
-const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange, tabHealth }: FoxMemorySectionProps) => {
+const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange, tabHealth, agentId }: FoxMemorySectionProps) => {
   const [subView, setSubView] = useState<SubView>('performance');
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const toggleRow = (i: number) => setExpandedRows((prev) => {
@@ -62,10 +62,11 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange, tabHealth
     return next;
   });
 
-  const { data: prompts, isFetching: promptsLoading } = useGetFoxmemoryPromptsQuery(undefined, {
+  const effectiveAgentId = agentId ?? undefined;
+  const { data: prompts, isFetching: promptsLoading } = useGetFoxmemoryPromptsQuery(effectiveAgentId, {
     skip: subView !== 'agents',
   });
-  const { data: graphStatsData, isFetching: graphStatsLoading } = useGetFoxmemoryGraphStatsQuery(undefined, {
+  const { data: graphStatsData, isFetching: graphStatsLoading } = useGetFoxmemoryGraphStatsQuery(effectiveAgentId, {
     skip: subView !== 'graph',
     pollingInterval: 15000,
     skipPollingIfUnfocused: true,
@@ -74,9 +75,9 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange, tabHealth
   const [saveUpdatePrompt] = useSetFoxmemoryUpdatePromptMutation();
   const [saveGraphPrompt] = useSetFoxmemoryGraphPromptMutation();
 
-  const onSaveExtractionPrompt = async (prompt: string | null) => { await saveExtractionPrompt({ prompt }).unwrap(); };
-  const onSaveUpdatePrompt = async (prompt: string | null) => { await saveUpdatePrompt({ prompt }).unwrap(); };
-  const onSaveGraphPrompt = async (prompt: string | null) => { await saveGraphPrompt({ prompt }).unwrap(); };
+  const onSaveExtractionPrompt = async (prompt: string | null) => { await saveExtractionPrompt({ prompt, agentId: effectiveAgentId }).unwrap(); };
+  const onSaveUpdatePrompt = async (prompt: string | null) => { await saveUpdatePrompt({ prompt, agentId: effectiveAgentId }).unwrap(); };
+  const onSaveGraphPrompt = async (prompt: string | null) => { await saveGraphPrompt({ prompt, agentId: effectiveAgentId }).unwrap(); };
 
   const chartData = useMemo(() => {
     if (!foxmemory) return [];
@@ -111,6 +112,7 @@ const FoxMemorySection = ({ foxmemory, chartRange, onChartRangeChange, tabHealth
           stats={graphStatsData?.data}
           diagnostics={foxmemory?.diagnostics}
           loading={graphStatsLoading}
+          agentId={agentId}
         />
       ) : subView === 'agents' ? (
         <FoxMemoryAgentsView

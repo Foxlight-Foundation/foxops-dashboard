@@ -1,76 +1,87 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { SessionsResponse, FoxmemoryResponse, FoxmemoryPromptsResponse, FoxmemoryGraphStats, FoxmemoryGraphData, FoxmemoryGraphSearchResult, FoxmemoryMemorySearchResult, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse, CronJobsResponse, CronRunsResponse, FoxmemoryModelsResponse, FoxmemoryCatalogResponse, ModelRoleKey, CatalogModel } from '../types';
+import type { SessionsResponse, FoxmemoryResponse, FoxmemoryPromptsResponse, FoxmemoryGraphStats, FoxmemoryGraphData, FoxmemoryGraphSearchResult, FoxmemoryMemorySearchResult, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse, CronJobsResponse, CronRunsResponse, FoxmemoryModelsResponse, FoxmemoryCatalogResponse, ModelRoleKey, CatalogModel, TenantRecord, AgentRecord } from '../types';
+
+const withAgent = (path: string, agentId?: string) =>
+  agentId ? `${path}${path.includes('?') ? '&' : '?'}agentId=${agentId}` : path;
 
 export const dashboardApi = createApi({
   reducerPath: 'dashboardApi',
   baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
-  tagTypes: ['Sessions', 'Foxmemory', 'Crons', 'FoxmemoryPrompts', 'FoxmemoryGraph', 'FoxmemoryModels'],
+  tagTypes: ['Sessions', 'Foxmemory', 'Crons', 'FoxmemoryPrompts', 'FoxmemoryGraph', 'FoxmemoryModels', 'Tenants', 'Agents'],
   endpoints: (builder) => ({
     getSessions: builder.query<SessionsResponse, void>({
       query: () => '/sessions',
       providesTags: ['Sessions'],
     }),
-    getFoxmemoryOverview: builder.query<FoxmemoryResponse, void>({
-      query: () => '/foxmemory/overview',
-      providesTags: ['Foxmemory'],
+    getTenants: builder.query<{ ok: boolean; data: TenantRecord[] }, void>({
+      query: () => '/tenants',
+      providesTags: ['Tenants'],
     }),
-    getFoxmemoryPrompts: builder.query<FoxmemoryPromptsResponse, void>({
-      query: () => '/foxmemory/prompts',
-      providesTags: ['FoxmemoryPrompts'],
+    getAgents: builder.query<{ ok: boolean; data: AgentRecord[] }, string>({
+      query: (tenantId) => `/tenants/${tenantId}/agents`,
+      providesTags: (_, __, tenantId) => [{ type: 'Agents' as const, id: tenantId }],
     }),
-    getFoxmemoryGraphStats: builder.query<{ ok: boolean; data: FoxmemoryGraphStats }, void>({
-      query: () => '/foxmemory/graph-stats',
-      providesTags: ['FoxmemoryGraph'],
+    getFoxmemoryOverview: builder.query<FoxmemoryResponse, string | undefined>({
+      query: (agentId) => withAgent('/foxmemory/overview', agentId),
+      providesTags: (_, __, agentId) => [{ type: 'Foxmemory' as const, id: agentId ?? 'GLOBAL' }],
     }),
-    getFoxmemoryGraphData: builder.query<{ ok: boolean; data: FoxmemoryGraphData }, void>({
-      query: () => '/foxmemory/graph-data',
-      providesTags: ['FoxmemoryGraph'],
+    getFoxmemoryPrompts: builder.query<FoxmemoryPromptsResponse, string | undefined>({
+      query: (agentId) => withAgent('/foxmemory/prompts', agentId),
+      providesTags: (_, __, agentId) => [{ type: 'FoxmemoryPrompts' as const, id: agentId ?? 'GLOBAL' }],
     }),
-    getFoxmemoryModels: builder.query<FoxmemoryModelsResponse, void>({
-      query: () => '/foxmemory/config/models',
-      providesTags: ['FoxmemoryModels'],
+    getFoxmemoryGraphStats: builder.query<{ ok: boolean; data: FoxmemoryGraphStats }, string | undefined>({
+      query: (agentId) => withAgent('/foxmemory/graph-stats', agentId),
+      providesTags: (_, __, agentId) => [{ type: 'FoxmemoryGraph' as const, id: agentId ?? 'GLOBAL' }],
     }),
-    getFoxmemoryCatalog: builder.query<FoxmemoryCatalogResponse, void>({
-      query: () => '/foxmemory/config/models/catalog',
-      providesTags: ['FoxmemoryModels'],
+    getFoxmemoryGraphData: builder.query<{ ok: boolean; data: FoxmemoryGraphData }, string | undefined>({
+      query: (agentId) => withAgent('/foxmemory/graph-data', agentId),
+      providesTags: (_, __, agentId) => [{ type: 'FoxmemoryGraph' as const, id: agentId ?? 'GLOBAL' }],
     }),
-    setFoxmemoryModel: builder.mutation<{ ok: boolean; data: { key: string; value: string; reloaded: boolean } }, { key: ModelRoleKey; value: string }>({
-      query: (body) => ({ url: '/foxmemory/config/model', method: 'PUT', body }),
-      invalidatesTags: ['FoxmemoryModels'],
+    getFoxmemoryModels: builder.query<FoxmemoryModelsResponse, string | undefined>({
+      query: (agentId) => withAgent('/foxmemory/config/models', agentId),
+      providesTags: (_, __, agentId) => [{ type: 'FoxmemoryModels' as const, id: agentId ?? 'GLOBAL' }],
     }),
-    revertFoxmemoryModel: builder.mutation<{ ok: boolean }, ModelRoleKey>({
-      query: (key) => ({ url: `/foxmemory/config/model/${key}`, method: 'DELETE' }),
-      invalidatesTags: ['FoxmemoryModels'],
+    getFoxmemoryCatalog: builder.query<FoxmemoryCatalogResponse, string | undefined>({
+      query: (agentId) => withAgent('/foxmemory/config/models/catalog', agentId),
+      providesTags: (_, __, agentId) => [{ type: 'FoxmemoryModels' as const, id: agentId ?? 'GLOBAL' }],
     }),
-    addCatalogModel: builder.mutation<{ ok: boolean; data: { model: CatalogModel } }, Omit<CatalogModel, 'created_at'>>({
-      query: (body) => ({ url: '/foxmemory/config/models/catalog', method: 'POST', body }),
-      invalidatesTags: ['FoxmemoryModels'],
+    setFoxmemoryModel: builder.mutation<{ ok: boolean; data: { key: string; value: string; reloaded: boolean } }, { key: ModelRoleKey; value: string; agentId?: string }>({
+      query: ({ key, value, agentId }) => ({ url: withAgent('/foxmemory/config/model', agentId), method: 'PUT', body: { key, value } }),
+      invalidatesTags: (_, __, { agentId }) => [{ type: 'FoxmemoryModels' as const, id: agentId ?? 'GLOBAL' }],
     }),
-    updateCatalogModel: builder.mutation<{ ok: boolean; data: { model: CatalogModel } }, Omit<CatalogModel, 'created_at'>>({
-      query: ({ id, ...rest }) => ({ url: `/foxmemory/config/models/catalog/${encodeURIComponent(id)}`, method: 'PUT', body: { id, ...rest } }),
-      invalidatesTags: ['FoxmemoryModels'],
+    revertFoxmemoryModel: builder.mutation<{ ok: boolean }, { key: ModelRoleKey; agentId?: string }>({
+      query: ({ key, agentId }) => ({ url: withAgent(`/foxmemory/config/model/${key}`, agentId), method: 'DELETE' }),
+      invalidatesTags: (_, __, { agentId }) => [{ type: 'FoxmemoryModels' as const, id: agentId ?? 'GLOBAL' }],
     }),
-    deleteCatalogModel: builder.mutation<{ ok: boolean; data: { deleted: string } }, string>({
-      query: (id) => ({ url: `/foxmemory/config/models/catalog/${encodeURIComponent(id)}`, method: 'DELETE' }),
-      invalidatesTags: ['FoxmemoryModels'],
+    addCatalogModel: builder.mutation<{ ok: boolean; data: { model: CatalogModel } }, Omit<CatalogModel, 'created_at'> & { agentId?: string }>({
+      query: ({ agentId, ...body }) => ({ url: withAgent('/foxmemory/config/models/catalog', agentId), method: 'POST', body }),
+      invalidatesTags: (_, __, { agentId }) => [{ type: 'FoxmemoryModels' as const, id: agentId ?? 'GLOBAL' }],
     }),
-    setFoxmemoryExtractionPrompt: builder.mutation<{ ok: boolean }, { prompt: string | null }>({
-      query: (body) => ({ url: '/foxmemory/config/prompt', method: 'PUT', body }),
-      invalidatesTags: ['FoxmemoryPrompts'],
+    updateCatalogModel: builder.mutation<{ ok: boolean; data: { model: CatalogModel } }, Omit<CatalogModel, 'created_at'> & { agentId?: string }>({
+      query: ({ id, agentId, ...rest }) => ({ url: withAgent(`/foxmemory/config/models/catalog/${encodeURIComponent(id)}`, agentId), method: 'PUT', body: { id, ...rest } }),
+      invalidatesTags: (_, __, { agentId }) => [{ type: 'FoxmemoryModels' as const, id: agentId ?? 'GLOBAL' }],
     }),
-    setFoxmemoryUpdatePrompt: builder.mutation<{ ok: boolean }, { prompt: string | null }>({
-      query: (body) => ({ url: '/foxmemory/config/update-prompt', method: 'PUT', body }),
-      invalidatesTags: ['FoxmemoryPrompts'],
+    deleteCatalogModel: builder.mutation<{ ok: boolean; data: { deleted: string } }, { id: string; agentId?: string }>({
+      query: ({ id, agentId }) => ({ url: withAgent(`/foxmemory/config/models/catalog/${encodeURIComponent(id)}`, agentId), method: 'DELETE' }),
+      invalidatesTags: (_, __, { agentId }) => [{ type: 'FoxmemoryModels' as const, id: agentId ?? 'GLOBAL' }],
     }),
-    setFoxmemoryGraphPrompt: builder.mutation<{ ok: boolean }, { prompt: string | null }>({
-      query: (body) => ({ url: '/foxmemory/config/graph-prompt', method: 'PUT', body }),
-      invalidatesTags: ['FoxmemoryPrompts'],
+    setFoxmemoryExtractionPrompt: builder.mutation<{ ok: boolean }, { prompt: string | null; agentId?: string }>({
+      query: ({ prompt, agentId }) => ({ url: withAgent('/foxmemory/config/prompt', agentId), method: 'PUT', body: { prompt } }),
+      invalidatesTags: (_, __, { agentId }) => [{ type: 'FoxmemoryPrompts' as const, id: agentId ?? 'GLOBAL' }],
     }),
-    searchFoxmemoryGraph: builder.mutation<{ ok: boolean; data: FoxmemoryGraphSearchResult }, { query: string }>({
-      query: (body) => ({ url: '/foxmemory/graph/search', method: 'POST', body }),
+    setFoxmemoryUpdatePrompt: builder.mutation<{ ok: boolean }, { prompt: string | null; agentId?: string }>({
+      query: ({ prompt, agentId }) => ({ url: withAgent('/foxmemory/config/update-prompt', agentId), method: 'PUT', body: { prompt } }),
+      invalidatesTags: (_, __, { agentId }) => [{ type: 'FoxmemoryPrompts' as const, id: agentId ?? 'GLOBAL' }],
     }),
-    searchFoxmemoryMemories: builder.mutation<{ ok: boolean; data: FoxmemoryMemorySearchResult }, { query: string; top_k?: number }>({
-      query: (body) => ({ url: '/foxmemory/memories/search', method: 'POST', body }),
+    setFoxmemoryGraphPrompt: builder.mutation<{ ok: boolean }, { prompt: string | null; agentId?: string }>({
+      query: ({ prompt, agentId }) => ({ url: withAgent('/foxmemory/config/graph-prompt', agentId), method: 'PUT', body: { prompt } }),
+      invalidatesTags: (_, __, { agentId }) => [{ type: 'FoxmemoryPrompts' as const, id: agentId ?? 'GLOBAL' }],
+    }),
+    searchFoxmemoryGraph: builder.mutation<{ ok: boolean; data: FoxmemoryGraphSearchResult }, { query: string; agentId?: string }>({
+      query: ({ query, agentId }) => ({ url: withAgent('/foxmemory/graph/search', agentId), method: 'POST', body: { query } }),
+    }),
+    searchFoxmemoryMemories: builder.mutation<{ ok: boolean; data: FoxmemoryMemorySearchResult }, { query: string; top_k?: number; agentId?: string }>({
+      query: ({ query, top_k, agentId }) => ({ url: withAgent('/foxmemory/memories/search', agentId), method: 'POST', body: { query, top_k } }),
     }),
     getCrons: builder.query<CronJobsResponse, void>({
       query: () => '/crons',
@@ -104,6 +115,8 @@ export const dashboardApi = createApi({
 
 export const {
   useGetSessionsQuery,
+  useGetTenantsQuery,
+  useGetAgentsQuery,
   useGetFoxmemoryOverviewQuery,
   useGetFoxmemoryPromptsQuery,
   useGetFoxmemoryGraphStatsQuery,

@@ -93,8 +93,9 @@ const MIN_DEGREE_OPTIONS = [
 
 type PanelTab = 'connections' | 'details';
 
-const GraphExplorer = ({ minDegree }: { minDegree: number }) => {
-  const { data, isLoading } = useGetFoxmemoryGraphDataQuery();
+const GraphExplorer = ({ minDegree, agentId }: { minDegree: number; agentId?: string | null }) => {
+  const effectiveAgentId = agentId ?? undefined;
+  const { data, isLoading } = useGetFoxmemoryGraphDataQuery(effectiveAgentId);
   const [searchGraph, { data: richData, isLoading: richLoading, reset: resetRich }] = useSearchFoxmemoryGraphMutation();
   const [searchMemories, { data: memoriesData, isLoading: memoriesLoading, reset: resetMemories }] = useSearchFoxmemoryMemoriesMutation();
   const [selectedNode, setSelectedNode] = useState<FoxmemoryGraphNode | null>(null);
@@ -161,12 +162,12 @@ const GraphExplorer = ({ minDegree }: { minDegree: number }) => {
     const n = node as RawNode;
     setSelectedNode((prev) => {
       if (prev?.id === n.id) { resetRich(); resetMemories(); return null; }
-      searchGraph({ query: n.name });
-      searchMemories({ query: n.name, top_k: 8 });
+      searchGraph({ query: n.name, agentId: effectiveAgentId });
+      searchMemories({ query: n.name, top_k: 8, agentId: effectiveAgentId });
       setPanelTab('connections');
       return { id: n.id, name: n.name, degree: n.degree };
     });
-  }, [searchGraph, resetRich, searchMemories, resetMemories]);
+  }, [searchGraph, resetRich, searchMemories, resetMemories, effectiveAgentId]);
 
   const nodeColor = useCallback((node: object) => {
     const n = node as RawNode;
@@ -373,7 +374,7 @@ const GraphExplorer = ({ minDegree }: { minDegree: number }) => {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-const FoxMemoryGraphView = ({ stats, diagnostics, loading }: FoxMemoryGraphViewProps) => {
+const FoxMemoryGraphView = ({ stats, diagnostics, loading, agentId }: FoxMemoryGraphViewProps) => {
   const [subView, setSubView] = useState<GraphSubView>('performance');
   const [minDegree, setMinDegree] = useState(1);
 
@@ -461,7 +462,7 @@ const FoxMemoryGraphView = ({ stats, diagnostics, loading }: FoxMemoryGraphViewP
 
 
       {subView === 'explorer' ? (
-        <GraphExplorer minDegree={minDegree} />
+        <GraphExplorer minDegree={minDegree} agentId={agentId} />
       ) : (
       <>
       <Grid container spacing={1.5} mb={2.5}>
