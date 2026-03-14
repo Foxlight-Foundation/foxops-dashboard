@@ -12,6 +12,28 @@ const ModelChip = ({ label, value }: { label: string; value: string | null | und
   </Box>
 );
 
+const EndpointRow = ({ label, url, keyOk }: { label: string; url?: string | null; keyOk?: boolean }) => (
+  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+    <Typography variant="caption" color="text.secondary" sx={{ minWidth: 80, fontSize: 10 }}>{label}</Typography>
+    <Typography variant="caption" sx={{ fontFamily: 'monospace', fontSize: 10, color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+      {url || '—'}
+    </Typography>
+    {keyOk != null && (
+      <Chip
+        label={keyOk ? 'key' : 'no key'}
+        size="small"
+        sx={{
+          fontSize: 9,
+          height: 16,
+          fontWeight: 600,
+          bgcolor: keyOk ? 'rgba(45,206,137,0.15)' : 'rgba(245,54,92,0.12)',
+          color: keyOk ? '#2dce89' : '#f5365c',
+        }}
+      />
+    )}
+  </Box>
+);
+
 const PromptEditor = ({
   label,
   description,
@@ -225,6 +247,19 @@ const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtract
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>Models</Typography>
             <ModelChip label="LLM" value={foxmemory?.llmModel} />
             <ModelChip label="Embedding" value={foxmemory?.embedModel} />
+
+            {/* Per-purpose endpoints */}
+            {foxmemory?.diagnostics?.baseUrl && (
+              <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
+                <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 0.75 }}>
+                  Endpoints
+                </Typography>
+                <EndpointRow label="LLM" url={foxmemory.diagnostics.baseUrl.llm} keyOk={foxmemory.diagnostics.apiKeyConfigured?.llm} />
+                <EndpointRow label="Embedding" url={foxmemory.diagnostics.baseUrl.embed} keyOk={foxmemory.diagnostics.apiKeyConfigured?.embed} />
+                <EndpointRow label="Graph LLM" url={foxmemory.diagnostics.baseUrl.graphLlm} keyOk={foxmemory.diagnostics.apiKeyConfigured?.graphLlm} />
+              </Box>
+            )}
+
             <Box sx={{ mt: 1.5, pt: 1.5, borderTop: 1, borderColor: 'divider' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
                 <Typography variant="caption" color="text.secondary" sx={{ minWidth: 80 }}>Graph</Typography>
@@ -255,6 +290,17 @@ const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtract
                     />
                   </Box>
                   <ModelChip label="Graph LLM" value={foxmemory?.diagnostics?.graphLlmModel} />
+                  {foxmemory?.diagnostics?.extractionStrategy && (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
+                      <Typography variant="caption" color="text.secondary" sx={{ minWidth: 80 }}>Extraction</Typography>
+                      <Chip
+                        label={foxmemory.diagnostics.extractionStrategy.replace('_', ' ')}
+                        size="small"
+                        variant="outlined"
+                        sx={{ fontFamily: 'monospace', fontSize: 10, height: 20 }}
+                      />
+                    </Box>
+                  )}
                 </>
               )}
             </Box>

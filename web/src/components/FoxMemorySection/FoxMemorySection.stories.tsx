@@ -31,7 +31,6 @@ const foxmemory: FoxmemoryResponse = {
   api: { ok: true, status: 200, endpoint: '/v2/health' },
   llmModel: 'gpt-4.1-nano',
   embedModel: 'text-embedding-3-small',
-  ingestionQueueDepth: null,
   memoryCount: 347,
   memoriesByDay: [
     { date: '2026-02-27', ADD: 10, UPDATE: 2, DELETE: 0, NONE: 0 },

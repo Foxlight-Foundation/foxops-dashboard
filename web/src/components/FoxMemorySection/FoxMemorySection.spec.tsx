@@ -20,7 +20,6 @@ const mockFoxmemory: FoxmemoryResponse = {
   api: { ok: true, status: 200, endpoint: '/v2/health' },
   llmModel: 'gpt-4.1-nano',
   embedModel: 'text-embedding-3-small',
-  ingestionQueueDepth: null,
   memoryCount: 142,
   memoriesByDay: [],
   memorySummary: { total: 142, byEvent: { ADD: 120, UPDATE: 18, DELETE: 4, NONE: 0 } },
