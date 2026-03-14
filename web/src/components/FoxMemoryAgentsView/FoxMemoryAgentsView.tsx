@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Box, Button, CardContent, Chip, CircularProgress, Grid, TextField, Typography } from '@mui/material';
+import { Box, Button, CardContent, Chip, CircularProgress, Grid, Slider, TextField, Typography } from '@mui/material';
 import { GlassCard } from '../shared/styled';
 import CheckCircleOutlineRoundedIcon from '@mui/icons-material/CheckCircleOutlineRounded';
+import { useGetCaptureConfigQuery, useSetCaptureConfigMutation, useRevertCaptureConfigMutation } from '../../services/dashboardApi';
 import type { FoxMemoryAgentsViewProps } from './FoxMemoryAgentsView.types';
 
 const ModelChip = ({ label, value }: { label: string; value: string | null | undefined }) => (
@@ -103,6 +104,118 @@ const PromptEditor = ({
   );
 };
 
+/**
+ * Capture Config Card
+ *
+ * Controls `capture_message_limit` — the number of recent conversation messages
+ * the plugin sends to the memory stack on each capture call. Lower values reduce
+ * LLM cost but may miss context; higher values capture more but cost more tokens.
+ *
+ * - Fetches current value via GET /v2/config/capture
+ * - Persists changes via PUT (survives service restarts)
+ * - "Revert" clears the persisted override (DELETE), falling back to env var or default
+ */
+const CaptureConfigCard = () => {
+  const { data: captureConfig, isLoading } = useGetCaptureConfigQuery();
+  const [setCaptureConfig] = useSetCaptureConfigMutation();
+  const [revertCaptureConfig] = useRevertCaptureConfigMutation();
+
+  const currentValue = captureConfig?.data?.capture_message_limit ?? 10;
+  const defaultValue = captureConfig?.data?.default ?? 10;
+  const source = captureConfig?.data?.source ?? 'unknown';
+
+  const [localValue, setLocalValue] = useState(currentValue);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // Sync local slider with upstream when data arrives or changes externally
+  useEffect(() => {
+    if (captureConfig?.data) setLocalValue(captureConfig.data.capture_message_limit);
+  }, [captureConfig]);
+
+  const isDirty = localValue !== currentValue;
+  const isOverridden = source === 'persisted';
+
+  const handleSave = async () => {
+    setSaving(true);
+    await setCaptureConfig({ capture_message_limit: localValue }).unwrap();
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  const handleRevert = async () => {
+    setSaving(true);
+    await revertCaptureConfig().unwrap();
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  return (
+    <GlassCard sx={{ borderRadius: 1, height: '100%' }}>
+      <CardContent sx={{ p: 2.5 }}>
+        <Typography variant="subtitle1" fontWeight={700} gutterBottom>Capture Window</Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          Messages sent per capture call. Lower = cheaper, higher = more context for fact extraction.
+        </Typography>
+        {isLoading ? (
+          <CircularProgress size={20} />
+        ) : (
+          <>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+              <Slider
+                value={localValue}
+                onChange={(_, v) => setLocalValue(v as number)}
+                min={1}
+                max={50}
+                step={1}
+                valueLabelDisplay="auto"
+                sx={{ flex: 1 }}
+              />
+              <Typography variant="h6" fontWeight={700} sx={{ minWidth: 32, textAlign: 'right' }}>
+                {localValue}
+              </Typography>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+              <Typography variant="caption" color="text.secondary">
+                Source: <strong>{source}</strong>
+              </Typography>
+              {source !== 'default' && (
+                <Typography variant="caption" color="text.secondary">
+                  · Default: {defaultValue}
+                </Typography>
+              )}
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+              <Button
+                variant="contained"
+                size="small"
+                disabled={!isDirty || saving}
+                onClick={handleSave}
+                startIcon={saving ? <CircularProgress size={14} color="inherit" /> : undefined}
+              >
+                {saving ? 'Saving…' : 'Apply'}
+              </Button>
+              {isOverridden && (
+                <Button variant="text" size="small" disabled={saving} onClick={handleRevert}>
+                  Revert to default
+                </Button>
+              )}
+              {saved && (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, color: 'success.main' }}>
+                  <CheckCircleOutlineRoundedIcon fontSize="small" />
+                  <Typography variant="caption">Saved</Typography>
+                </Box>
+              )}
+            </Box>
+          </>
+        )}
+      </CardContent>
+    </GlassCard>
+  );
+};
+
 const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtractionPrompt, onSaveUpdatePrompt, onSaveGraphPrompt }: FoxMemoryAgentsViewProps) => (
   <>
     <Grid container spacing={2} mb={2}>
@@ -148,7 +261,10 @@ const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtract
           </CardContent>
         </GlassCard>
       </Grid>
-      <Grid item xs={12} md={8}>
+      <Grid item xs={12} md={4}>
+        <CaptureConfigCard />
+      </Grid>
+      <Grid item xs={12} md={4}>
         <GlassCard sx={{ borderRadius: 1, height: '100%' }}>
           <CardContent sx={{ p: 2.5 }}>
             <Typography variant="subtitle1" fontWeight={700} gutterBottom>About the agent pipeline</Typography>

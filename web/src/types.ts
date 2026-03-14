@@ -87,6 +87,34 @@ export interface FoxmemoryPromptsResponse {
   graphPrompt: FoxmemoryPromptConfig;
 }
 
+/** Response shape from GET/PUT/DELETE /v2/config/capture */
+export interface CaptureConfigResponse {
+  ok: boolean;
+  data: {
+    capture_message_limit: number;
+    default: number;
+    source: 'default' | 'env' | 'persisted';
+    persisted: boolean;
+  };
+}
+
+/**
+ * Response shape from GET/PUT/DELETE /v2/config/roles
+ *
+ * Controls how message roles are labeled in extraction context.
+ * Setting real names lets the LLM attribute memories correctly
+ * (e.g. "Thomas prefers…" instead of "User prefers…").
+ */
+export interface RolesConfigResponse {
+  ok: boolean;
+  data: {
+    user: string;
+    assistant: string;
+    source: 'default' | 'env' | 'persisted';
+    persisted: boolean;
+  };
+}
+
 export interface FoxmemoryDiagnostics {
   graphEnabled?: boolean;
   graphLlmModel?: string | null;
