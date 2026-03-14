@@ -7,4 +7,5 @@ export interface FoxMemoryAgentsViewProps {
   onSaveExtractionPrompt: (prompt: string | null) => Promise<void>;
   onSaveUpdatePrompt: (prompt: string | null) => Promise<void>;
   onSaveGraphPrompt: (prompt: string | null) => Promise<void>;
+  agentId?: string | null;
 }

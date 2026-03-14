@@ -103,7 +103,7 @@ const NAV_ITEMS = [
   { section: 'config' as const, label: 'Model Config', icon: <TuneRoundedIcon fontSize="small" /> },
 ];
 
-const Sidebar = ({ section, onSectionChange, health }: SidebarProps) => (
+const Sidebar = ({ section, onSectionChange, health, children }: SidebarProps) => (
   <StyledDrawer variant="permanent">
     <SidebarPanel>
       <List disablePadding sx={{ display: 'grid' }}>
@@ -115,6 +115,25 @@ const Sidebar = ({ section, onSectionChange, health }: SidebarProps) => (
           </NavItem>
         ))}
       </List>
+      {children && (
+        <Box px={0.5} mt={1.5}>
+          <Typography
+            variant="caption"
+            sx={{
+              color: (theme) => theme.palette.mode === 'dark' ? '#adb5bd' : 'rgba(255,255,255,0.5)',
+              fontSize: 10,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: 0.5,
+              display: 'block',
+              mb: 0.75,
+            }}
+          >
+            Agent
+          </Typography>
+          {children}
+        </Box>
+      )}
       <Box mt="auto" px={0.5}>
         <Typography
           variant="caption"

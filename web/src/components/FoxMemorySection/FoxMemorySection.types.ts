@@ -5,4 +5,5 @@ export interface FoxMemorySectionProps {
   chartRange: ChartRange;
   onChartRangeChange: (range: ChartRange) => void;
   tabHealth?: { performance?: SectionHealth; agents?: SectionHealth; graph?: SectionHealth };
+  agentId?: string | null;
 }

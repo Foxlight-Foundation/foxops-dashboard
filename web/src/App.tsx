@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Box, Container, CssBaseline } from '@mui/material';
 import { createTheme, styled, ThemeProvider } from '@mui/material/styles';
 import { useDispatch, useSelector } from 'react-redux';
-import { setSection, setChartRange, toggleMode } from './uiSlice';
+import { setSection, setChartRange, toggleMode, setSelectedAgentId } from './uiSlice';
 import {
   useGetSessionsQuery,
   useGetFoxmemoryOverviewQuery,
@@ -20,6 +20,7 @@ import FoxMemorySection from './components/FoxMemorySection/FoxMemorySection';
 import ModelConfigSection from './components/ModelConfigSection/ModelConfigSection';
 import LoginView from './components/LoginView/LoginView';
 import MfaView from './components/MfaView/MfaView';
+import AgentSelector from './components/AgentSelector/AgentSelector';
 import SeatedFoxIcon from './components/shared/SeatedFoxIcon';
 
 const AppShell = styled(Box, { shouldForwardProp: (p) => p !== 'mode' })<{ mode: 'light' | 'dark' }>(({ mode }) => ({
@@ -63,7 +64,7 @@ const isActive = (s: OpenclawSession) => (s.ageMs ?? Infinity) < MS_12H;
 
 const App = () => {
   const dispatch = useDispatch();
-  const { mode, section, chartRange } = useSelector((s: RootState) => s.ui);
+  const { mode, section, chartRange, selectedAgentId } = useSelector((s: RootState) => s.ui);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [authState, setAuthState] = useState<AuthState>('loading');
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
@@ -104,7 +105,7 @@ const App = () => {
     error: foxError,
     refetch: refetchFox,
     fulfilledTimeStamp: foxFulfilledAt,
-  } = useGetFoxmemoryOverviewQuery(undefined, { skip: section !== 'foxmemory', pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnReconnect: true });
+  } = useGetFoxmemoryOverviewQuery(selectedAgentId ?? undefined, { skip: section !== 'foxmemory', pollingInterval: 15000, skipPollingIfUnfocused: true, refetchOnFocus: true, refetchOnReconnect: true });
 
   const {
     data: cronsData,
@@ -250,7 +251,9 @@ const App = () => {
           onLogout={() => { window.location.href = '/auth/logout'; }}
         />
         <Box sx={{ display: 'flex', flexGrow: 1 }}>
-          <Sidebar section={section} onSectionChange={(s) => dispatch(setSection(s))} health={healthMap} />
+          <Sidebar section={section} onSectionChange={(s) => dispatch(setSection(s))} health={healthMap}>
+            <AgentSelector selectedAgentId={selectedAgentId} onAgentChange={(id) => dispatch(setSelectedAgentId(id))} />
+          </Sidebar>
           <Box sx={{ flexGrow: 1 }}>
           <Container maxWidth="xl" sx={{ py: 3 }}>
             {notice && <Alert severity={notice.severity} sx={{ mb: 2 }} onClose={() => setNotice(null)}>{notice.text}</Alert>}
@@ -267,13 +270,14 @@ const App = () => {
                 onDelete={onDelete}
               />
             ) : section === 'config' ? (
-              <ModelConfigSection />
+              <ModelConfigSection agentId={selectedAgentId} />
             ) : (
               <FoxMemorySection
                 foxmemory={foxmemory}
                 chartRange={chartRange}
                 onChartRangeChange={(r) => dispatch(setChartRange(r))}
                 tabHealth={{ performance: foxIsError ? 'error' : foxmemory ? 'ok' : undefined }}
+                agentId={selectedAgentId}
               />
             )}
           </Container>

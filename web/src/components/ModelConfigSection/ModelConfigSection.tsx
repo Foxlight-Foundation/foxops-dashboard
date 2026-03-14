@@ -8,6 +8,7 @@ import DeleteOutlineRoundedIcon from '@mui/icons-material/DeleteOutlineRounded';
 import EditRoundedIcon from '@mui/icons-material/EditRounded';
 import { useGetFoxmemoryModelsQuery, useGetFoxmemoryCatalogQuery, useSetFoxmemoryModelMutation, useRevertFoxmemoryModelMutation, useAddCatalogModelMutation, useUpdateCatalogModelMutation, useDeleteCatalogModelMutation } from '../../services/dashboardApi';
 import type { CatalogModel, ModelRoleKey } from '../../types';
+import type { ModelConfigSectionProps } from './ModelConfigSection.types';
 
 const fmtCost = (v?: number | null) => v == null ? '—' : `$${v.toFixed(3)}`;
 
@@ -253,9 +254,10 @@ const CatalogForm = ({ initial, isNew, saving, onSave, onCancel }: CatalogFormPr
   );
 };
 
-const ModelConfigSection = () => {
-  const { data: modelsData, isLoading: modelsLoading } = useGetFoxmemoryModelsQuery();
-  const { data: catalogData, isLoading: catalogLoading } = useGetFoxmemoryCatalogQuery();
+const ModelConfigSection = ({ agentId }: ModelConfigSectionProps) => {
+  const effectiveAgentId = agentId ?? undefined;
+  const { data: modelsData, isLoading: modelsLoading } = useGetFoxmemoryModelsQuery(effectiveAgentId);
+  const { data: catalogData, isLoading: catalogLoading } = useGetFoxmemoryCatalogQuery(effectiveAgentId);
   const [setModel] = useSetFoxmemoryModelMutation();
   const [revertModel] = useRevertFoxmemoryModelMutation();
   const [addCatalog] = useAddCatalogModelMutation();
@@ -270,7 +272,7 @@ const ModelConfigSection = () => {
   const handleApply = async (key: ModelRoleKey, value: string) => {
     setSavingKey(key);
     try {
-      await setModel({ key, value }).unwrap();
+      await setModel({ key, value, agentId: effectiveAgentId }).unwrap();
     } finally {
       setSavingKey(null);
     }
@@ -279,7 +281,7 @@ const ModelConfigSection = () => {
   const handleRevert = async (key: ModelRoleKey) => {
     setSavingKey(key);
     try {
-      await revertModel(key).unwrap();
+      await revertModel({ key, agentId: effectiveAgentId }).unwrap();
     } finally {
       setSavingKey(null);
     }
@@ -297,19 +299,19 @@ const ModelConfigSection = () => {
 
   const handleAdd = async (form: CatalogFormData) => {
     setCatalogSaving(true);
-    try { await addCatalog(formToCatalog(form) as CatalogModel).unwrap(); setAddingNew(false); }
+    try { await addCatalog({ ...formToCatalog(form), agentId: effectiveAgentId } as CatalogModel & { agentId?: string }).unwrap(); setAddingNew(false); }
     finally { setCatalogSaving(false); }
   };
 
   const handleUpdate = async (form: CatalogFormData) => {
     setCatalogSaving(true);
-    try { await updateCatalog(formToCatalog(form) as CatalogModel).unwrap(); setEditingId(null); }
+    try { await updateCatalog({ ...formToCatalog(form), agentId: effectiveAgentId } as CatalogModel & { agentId?: string }).unwrap(); setEditingId(null); }
     finally { setCatalogSaving(false); }
   };
 
   const handleDelete = async (id: string) => {
     setCatalogSaving(true);
-    try { await deleteCatalog(id).unwrap(); setDeletingId(null); }
+    try { await deleteCatalog({ id, agentId: effectiveAgentId }).unwrap(); setDeletingId(null); }
     finally { setCatalogSaving(false); }
   };
 

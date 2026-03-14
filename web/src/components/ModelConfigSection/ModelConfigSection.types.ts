@@ -1,1 +1,3 @@
-export interface ModelConfigSectionProps {}
+export interface ModelConfigSectionProps {
+  agentId?: string | null;
+}

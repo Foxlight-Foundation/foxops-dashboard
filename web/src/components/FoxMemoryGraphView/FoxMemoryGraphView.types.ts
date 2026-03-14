@@ -4,4 +4,5 @@ export interface FoxMemoryGraphViewProps {
   stats: FoxmemoryGraphStats | undefined;
   diagnostics: FoxmemoryDiagnostics | null | undefined;
   loading: boolean;
+  agentId?: string | null;
 }
