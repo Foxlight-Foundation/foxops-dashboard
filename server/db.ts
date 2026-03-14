@@ -32,6 +32,13 @@ db.exec(`
     status TEXT NOT NULL,
     note TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS tenant_memberships (
+    user_id    INTEGER NOT NULL REFERENCES users(id),
+    tenant_id  TEXT NOT NULL,
+    role       TEXT NOT NULL DEFAULT 'viewer',
+    PRIMARY KEY(user_id, tenant_id)
+  );
 `);
 
 export interface DbUser {
