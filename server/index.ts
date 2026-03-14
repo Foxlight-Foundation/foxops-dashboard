@@ -145,16 +145,22 @@ interface KillRequestBody {
   reason?: string;
 }
 
+// ── Helper: build upstream foxmemory URL (agent-scoped when agentId provided) ─
+const foxmemoryUrl = (urlPath: string, agentId?: string) => {
+  const base = agentId ? `/v2/agents/${agentId}` : '/v2';
+  return `${foxmemoryBaseUrl}${base}${urlPath}`;
+};
+
 // ── Data loading ───────────────────────────────────────────────────────────────
 
-const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
+const probeFoxmemory = async (agentId?: string): Promise<FoxmemoryOverview> => {
   // Health probe via v2
   let api: ApiResult = { ok: false, status: null, endpoint: null };
   let llmModel: string | null = null;
   let embedModel: string | null = null;
   let diagnostics: FoxmemoryDiagnostics | null = null;
   try {
-    const res = await fetch(`${foxmemoryBaseUrl}/v2/health`, { method: 'GET' });
+    const res = await fetch(foxmemoryUrl('/health', agentId), { method: 'GET' });
     api = { ok: res.ok, status: res.status, endpoint: '/v2/health' };
     if (res.ok) {
       const json = (await res.json()) as { data?: { llmModel?: string; embedModel?: string; diagnostics?: { graphEnabled?: boolean; graphLlmModel?: string; neo4jUrl?: string; neo4jConnected?: boolean; neo4jNodeCount?: number; neo4jRelationCount?: number } } };
@@ -176,7 +182,7 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
   // Runtime stats (/v2/stats) for writesByMode + memoryEvents counters
   let foxmemoryStats: FoxmemoryStats | null = null;
   try {
-    const statsRes = await fetch(`${foxmemoryBaseUrl}/v2/stats`, { method: 'GET' });
+    const statsRes = await fetch(foxmemoryUrl('/stats', agentId), { method: 'GET' });
     if (statsRes.ok) {
       const json = (await statsRes.json()) as { ok?: boolean; data?: { writesByMode?: FoxmemoryStats['writesByMode']; memoryEvents?: FoxmemoryStats['memoryEvents'] } } & FoxmemoryStats;
       const data = json?.data ?? json;
@@ -205,8 +211,8 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
   const RECENT_ACTIVITY_DISPLAY_LIMIT = 20;
   try {
     const [memStatsRes, writeEventsRes] = await Promise.all([
-      fetch(`${foxmemoryBaseUrl}/v2/stats/memories?days=30`, { method: 'GET' }),
-      fetch(`${foxmemoryBaseUrl}/v2/write-events?limit=${WRITE_EVENTS_FETCH_LIMIT}`, { method: 'GET' }),
+      fetch(`${foxmemoryUrl('/stats/memories', agentId)}?days=30`, { method: 'GET' }),
+      fetch(`${foxmemoryUrl('/write-events', agentId)}?limit=${WRITE_EVENTS_FETCH_LIMIT}`, { method: 'GET' }),
     ]);
     if (memStatsRes.ok) {
       const json = (await memStatsRes.json()) as {
@@ -517,13 +523,14 @@ app.post('/api/crons/:id/run', async (req: Request, res: Response) => {
   }
 });
 
-app.get('/api/foxmemory/prompts', async (_req: Request, res: Response) => {
+app.get('/api/foxmemory/prompts', async (req: Request, res: Response) => {
   try {
+    const agentId = req.query.agentId as string | undefined;
     type PromptData = { data?: { prompt: string | null; effective_prompt: string | null; source: string; persisted: boolean } };
     const [p1, p2, p3] = await Promise.all([
-      fetch(`${foxmemoryBaseUrl}/v2/config/prompt`).then((r) => r.json()),
-      fetch(`${foxmemoryBaseUrl}/v2/config/update-prompt`).then((r) => r.json()),
-      fetch(`${foxmemoryBaseUrl}/v2/config/graph-prompt`).then((r) => r.json()),
+      fetch(foxmemoryUrl('/config/prompt', agentId)).then((r) => r.json()),
+      fetch(foxmemoryUrl('/config/update-prompt', agentId)).then((r) => r.json()),
+      fetch(foxmemoryUrl('/config/graph-prompt', agentId)).then((r) => r.json()),
     ]) as [PromptData, PromptData, PromptData];
     const fallback = { prompt: null, effective_prompt: null, source: 'unknown', persisted: false };
     return res.json({
@@ -539,7 +546,8 @@ app.get('/api/foxmemory/prompts', async (_req: Request, res: Response) => {
 
 app.put('/api/foxmemory/config/prompt', async (req: Request<Record<string, never>, unknown, { prompt: string | null }>, res: Response) => {
   try {
-    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/prompt`, {
+    const agentId = req.query.agentId as string | undefined;
+    const upstream = await fetch(foxmemoryUrl('/config/prompt', agentId), {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ prompt: req.body.prompt ?? null }),
@@ -553,7 +561,8 @@ app.put('/api/foxmemory/config/prompt', async (req: Request<Record<string, never
 
 app.put('/api/foxmemory/config/update-prompt', async (req: Request<Record<string, never>, unknown, { prompt: string | null }>, res: Response) => {
   try {
-    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/update-prompt`, {
+    const agentId = req.query.agentId as string | undefined;
+    const upstream = await fetch(foxmemoryUrl('/config/update-prompt', agentId), {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ prompt: req.body.prompt ?? null }),
@@ -567,7 +576,8 @@ app.put('/api/foxmemory/config/update-prompt', async (req: Request<Record<string
 
 app.put('/api/foxmemory/config/graph-prompt', async (req: Request<Record<string, never>, unknown, { prompt: string | null }>, res: Response) => {
   try {
-    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/graph-prompt`, {
+    const agentId = req.query.agentId as string | undefined;
+    const upstream = await fetch(foxmemoryUrl('/config/graph-prompt', agentId), {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ prompt: req.body.prompt ?? null }),
@@ -579,9 +589,10 @@ app.put('/api/foxmemory/config/graph-prompt', async (req: Request<Record<string,
   }
 });
 
-app.get('/api/foxmemory/graph-stats', async (_req: Request, res: Response) => {
+app.get('/api/foxmemory/graph-stats', async (req: Request, res: Response) => {
   try {
-    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/graph/stats`);
+    const agentId = req.query.agentId as string | undefined;
+    const upstream = await fetch(foxmemoryUrl('/graph/stats', agentId));
     if (!upstream.ok) return res.status(upstream.status).json({ ok: false, error: 'upstream error' });
     const json = await upstream.json();
     return res.json({ ok: true, data: json?.data ?? json });
@@ -590,10 +601,11 @@ app.get('/api/foxmemory/graph-stats', async (_req: Request, res: Response) => {
   }
 });
 
-app.get('/api/foxmemory/graph-data', async (_req: Request, res: Response) => {
+app.get('/api/foxmemory/graph-data', async (req: Request, res: Response) => {
   try {
+    const agentId = req.query.agentId as string | undefined;
     const upstream = await fetch(
-      `${foxmemoryBaseUrl}/v2/graph/relations?user_id=${encodeURIComponent(foxmemoryUserId)}&limit=500`
+      `${foxmemoryUrl('/graph/relations', agentId)}?user_id=${encodeURIComponent(foxmemoryUserId)}&limit=500`
     );
     if (!upstream.ok) return res.status(upstream.status).json({ ok: false, error: 'upstream error' });
     const json = (await upstream.json()) as {
@@ -619,9 +631,10 @@ app.get('/api/foxmemory/graph-data', async (_req: Request, res: Response) => {
 
 app.post('/api/foxmemory/memories/search', async (req: Request<Record<string, never>, unknown, { query: string; top_k?: number }>, res: Response) => {
   try {
+    const agentId = req.query.agentId as string | undefined;
     const { query, top_k = 5 } = req.body;
     if (!query) return res.status(400).json({ ok: false, error: 'query required' });
-    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/memories/search`, {
+    const upstream = await fetch(foxmemoryUrl('/memories/search', agentId), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, user_id: foxmemoryUserId, top_k }),
@@ -635,9 +648,10 @@ app.post('/api/foxmemory/memories/search', async (req: Request<Record<string, ne
 
 app.post('/api/foxmemory/graph/search', async (req: Request<Record<string, never>, unknown, { query: string }>, res: Response) => {
   try {
+    const agentId = req.query.agentId as string | undefined;
     const { query } = req.body;
     if (!query) return res.status(400).json({ ok: false, error: 'query required' });
-    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/graph/search`, {
+    const upstream = await fetch(foxmemoryUrl('/graph/search', agentId), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ query, user_id: foxmemoryUserId }),
@@ -651,7 +665,8 @@ app.post('/api/foxmemory/graph/search', async (req: Request<Record<string, never
 
 app.get('/api/foxmemory/graph/node/:id', async (req: Request<{ id: string }>, res: Response) => {
   try {
-    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/graph/nodes/${encodeURIComponent(req.params.id)}`);
+    const agentId = req.query.agentId as string | undefined;
+    const upstream = await fetch(foxmemoryUrl(`/graph/nodes/${encodeURIComponent(req.params.id)}`, agentId));
     const json = await upstream.json();
     return res.status(upstream.status).json(json);
   } catch (error: unknown) {
@@ -661,9 +676,10 @@ app.get('/api/foxmemory/graph/node/:id', async (req: Request<{ id: string }>, re
 
 // ── Model config proxy ─────────────────────────────────────────────────────
 
-app.get('/api/foxmemory/config/models', async (_req: Request, res: Response) => {
+app.get('/api/foxmemory/config/models', async (req: Request, res: Response) => {
   try {
-    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/models`);
+    const agentId = req.query.agentId as string | undefined;
+    const upstream = await fetch(foxmemoryUrl('/config/models', agentId));
     const json = await upstream.json();
     return res.status(upstream.status).json(json);
   } catch (error: unknown) {
@@ -673,7 +689,8 @@ app.get('/api/foxmemory/config/models', async (_req: Request, res: Response) => 
 
 app.put('/api/foxmemory/config/model', requireMfa, async (req: Request<Record<string, never>, unknown, { key: string; value: string }>, res: Response) => {
   try {
-    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/model`, {
+    const agentId = req.query.agentId as string | undefined;
+    const upstream = await fetch(foxmemoryUrl('/config/model', agentId), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
@@ -687,7 +704,8 @@ app.put('/api/foxmemory/config/model', requireMfa, async (req: Request<Record<st
 
 app.delete('/api/foxmemory/config/model/:key', requireMfa, async (req: Request<{ key: string }>, res: Response) => {
   try {
-    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/model/${encodeURIComponent(req.params.key)}`, {
+    const agentId = req.query.agentId as string | undefined;
+    const upstream = await fetch(foxmemoryUrl(`/config/model/${encodeURIComponent(req.params.key)}`, agentId), {
       method: 'DELETE',
     });
     const json = await upstream.json();
@@ -699,10 +717,10 @@ app.delete('/api/foxmemory/config/model/:key', requireMfa, async (req: Request<{
 
 app.get('/api/foxmemory/config/models/catalog', async (req: Request, res: Response) => {
   try {
+    const agentId = req.query.agentId as string | undefined;
     const role = req.query.role as string | undefined;
-    const url = role
-      ? `${foxmemoryBaseUrl}/v2/config/models/catalog?role=${encodeURIComponent(role)}`
-      : `${foxmemoryBaseUrl}/v2/config/models/catalog`;
+    const baseUrl = foxmemoryUrl('/config/models/catalog', agentId);
+    const url = role ? `${baseUrl}?role=${encodeURIComponent(role)}` : baseUrl;
     const upstream = await fetch(url);
     const json = await upstream.json();
     return res.status(upstream.status).json(json);
@@ -713,7 +731,8 @@ app.get('/api/foxmemory/config/models/catalog', async (req: Request, res: Respon
 
 app.post('/api/foxmemory/config/models/catalog', async (req: Request, res: Response) => {
   try {
-    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/models/catalog`, {
+    const agentId = req.query.agentId as string | undefined;
+    const upstream = await fetch(foxmemoryUrl('/config/models/catalog', agentId), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
@@ -727,7 +746,8 @@ app.post('/api/foxmemory/config/models/catalog', async (req: Request, res: Respo
 
 app.put('/api/foxmemory/config/models/catalog/:id', async (req: Request<{ id: string }>, res: Response) => {
   try {
-    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/models/catalog/${encodeURIComponent(req.params.id)}`, {
+    const agentId = req.query.agentId as string | undefined;
+    const upstream = await fetch(foxmemoryUrl(`/config/models/catalog/${encodeURIComponent(req.params.id)}`, agentId), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req.body),
@@ -741,7 +761,8 @@ app.put('/api/foxmemory/config/models/catalog/:id', async (req: Request<{ id: st
 
 app.delete('/api/foxmemory/config/models/catalog/:id', async (req: Request<{ id: string }>, res: Response) => {
   try {
-    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/models/catalog/${encodeURIComponent(req.params.id)}`, {
+    const agentId = req.query.agentId as string | undefined;
+    const upstream = await fetch(foxmemoryUrl(`/config/models/catalog/${encodeURIComponent(req.params.id)}`, agentId), {
       method: 'DELETE',
     });
     const json = await upstream.json();
@@ -751,10 +772,33 @@ app.delete('/api/foxmemory/config/models/catalog/:id', async (req: Request<{ id:
   }
 });
 
-app.get('/api/foxmemory/overview', async (_req: Request, res: Response) => {
+app.get('/api/foxmemory/overview', async (req: Request, res: Response) => {
   try {
-    const overview = await probeFoxmemory();
+    const agentId = req.query.agentId as string | undefined;
+    const overview = await probeFoxmemory(agentId);
     return res.json({ ok: true, ...overview });
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+// ── Tenant / Agent proxy routes ──────────────────────────────────────────────
+
+app.get('/api/tenants', async (_req: Request, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/tenants`);
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.get('/api/tenants/:tenantId/agents', async (req: Request<{ tenantId: string }>, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/tenants/${encodeURIComponent(req.params.tenantId)}/agents`);
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
   } catch (error: unknown) {
     return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
   }
