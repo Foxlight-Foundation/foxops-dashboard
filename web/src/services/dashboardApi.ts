@@ -36,11 +36,11 @@ export const dashboardApi = createApi({
     }),
     setFoxmemoryModel: builder.mutation<{ ok: boolean; data: { key: string; value: string; reloaded: boolean } }, { key: ModelRoleKey; value: string }>({
       query: (body) => ({ url: '/foxmemory/config/model', method: 'PUT', body }),
-      invalidatesTags: ['FoxmemoryModels'],
+      invalidatesTags: ['FoxmemoryModels', 'Foxmemory'],
     }),
     revertFoxmemoryModel: builder.mutation<{ ok: boolean }, ModelRoleKey>({
       query: (key) => ({ url: `/foxmemory/config/model/${key}`, method: 'DELETE' }),
-      invalidatesTags: ['FoxmemoryModels'],
+      invalidatesTags: ['FoxmemoryModels', 'Foxmemory'],
     }),
     addCatalogModel: builder.mutation<{ ok: boolean; data: { model: CatalogModel } }, Omit<CatalogModel, 'created_at'>>({
       query: (body) => ({ url: '/foxmemory/config/models/catalog', method: 'POST', body }),

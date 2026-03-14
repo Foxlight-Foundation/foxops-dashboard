@@ -91,10 +91,14 @@ interface MemoryDayEntry {
 interface MemoryActivityEntry {
   ts: string;
   event: string;
-  memoryId: string;
+  memoryId: string | null;
   userId?: string;
   runId?: string;
   preview?: string;
+  memoryText?: string;
+  reason?: string | null;
+  extractedFacts?: string[] | null;
+  callId?: string | null;
   latencyMs?: number;
   inferMode?: boolean;
 }
@@ -115,12 +119,19 @@ interface MemorySearchStats {
 }
 
 interface FoxmemoryDiagnostics {
+  authMode?: string;
+  openaiApiKeyConfigured?: boolean;
+  openaiBaseUrl?: string | null;
+  apiKeyConfigured?: { llm: boolean; embed: boolean; graphLlm: boolean };
+  baseUrl?: { llm: string | null; embed: string | null; graphLlm: string | null };
   graphEnabled?: boolean;
   graphLlmModel?: string | null;
+  extractionStrategy?: 'tool_calling' | 'json_prompting' | null;
   neo4jUrl?: string | null;
   neo4jConnected?: boolean;
   neo4jNodeCount?: number | null;
   neo4jRelationCount?: number | null;
+  neo4jError?: string;
 }
 
 interface FoxmemoryOverview {
@@ -129,7 +140,6 @@ interface FoxmemoryOverview {
   api: ApiResult;
   llmModel: string | null;
   embedModel: string | null;
-  ingestionQueueDepth: number | null;
   memoryCount: number;
   memoriesByDay: MemoryDayEntry[];
   memorySummary: MemorySummary | null;
@@ -157,11 +167,25 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
     const res = await fetch(`${foxmemoryBaseUrl}/v2/health`, { method: 'GET' });
     api = { ok: res.ok, status: res.status, endpoint: '/v2/health' };
     if (res.ok) {
-      const json = (await res.json()) as { data?: { llmModel?: string; embedModel?: string; diagnostics?: { graphEnabled?: boolean; graphLlmModel?: string; neo4jUrl?: string; neo4jConnected?: boolean; neo4jNodeCount?: number; neo4jRelationCount?: number } } };
+      const json = (await res.json()) as { data?: { llmModel?: string; embedModel?: string; diagnostics?: FoxmemoryDiagnostics } };
       llmModel = json?.data?.llmModel ?? null;
       embedModel = json?.data?.embedModel ?? null;
       const d = json?.data?.diagnostics;
-      if (d) diagnostics = { graphEnabled: d.graphEnabled, graphLlmModel: d.graphLlmModel ?? null, neo4jUrl: d.neo4jUrl ?? null, neo4jConnected: d.neo4jConnected, neo4jNodeCount: d.neo4jNodeCount ?? null, neo4jRelationCount: d.neo4jRelationCount ?? null };
+      if (d) diagnostics = {
+        authMode: d.authMode,
+        openaiApiKeyConfigured: d.openaiApiKeyConfigured,
+        openaiBaseUrl: d.openaiBaseUrl ?? null,
+        apiKeyConfigured: d.apiKeyConfigured,
+        baseUrl: d.baseUrl,
+        graphEnabled: d.graphEnabled,
+        graphLlmModel: d.graphLlmModel ?? null,
+        extractionStrategy: d.extractionStrategy ?? null,
+        neo4jUrl: d.neo4jUrl ?? null,
+        neo4jConnected: d.neo4jConnected,
+        neo4jNodeCount: d.neo4jNodeCount ?? null,
+        neo4jRelationCount: d.neo4jRelationCount ?? null,
+        ...(d.neo4jError ? { neo4jError: d.neo4jError } : {}),
+      };
     }
   } catch {
     // fallback to /health
@@ -294,7 +318,6 @@ const probeFoxmemory = async (): Promise<FoxmemoryOverview> => {
     api,
     llmModel,
     embedModel,
-    ingestionQueueDepth: null,
     memoryCount,
     memoriesByDay,
     memorySummary,

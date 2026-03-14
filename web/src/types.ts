@@ -28,10 +28,6 @@ export interface SessionsResponse {
 export interface FoxmemoryStats {
   writesByMode?: { infer?: number; raw?: number };
   memoryEvents?: { ADD?: number; UPDATE?: number; DELETE?: number; NONE?: number };
-  ingestionQueueDepth?: number;
-  ingestion_queue_depth?: number;
-  queueDepth?: number;
-  queue_depth?: number;
 }
 
 export interface MemoryDayEntry {
@@ -116,12 +112,21 @@ export interface RolesConfigResponse {
 }
 
 export interface FoxmemoryDiagnostics {
+  authMode?: string;
+  /** Legacy compat — use apiKeyConfigured.llm instead */
+  openaiApiKeyConfigured?: boolean;
+  /** Legacy compat — use baseUrl.llm instead */
+  openaiBaseUrl?: string | null;
+  apiKeyConfigured?: { llm: boolean; embed: boolean; graphLlm: boolean };
+  baseUrl?: { llm: string | null; embed: string | null; graphLlm: string | null };
   graphEnabled?: boolean;
   graphLlmModel?: string | null;
+  extractionStrategy?: 'tool_calling' | 'json_prompting' | null;
   neo4jUrl?: string | null;
   neo4jConnected?: boolean;
   neo4jNodeCount?: number | null;
   neo4jRelationCount?: number | null;
+  neo4jError?: string;
 }
 
 export interface FoxmemoryGraphStats {
@@ -196,7 +201,6 @@ export interface FoxmemoryResponse {
   api: { ok: boolean; status: number | null; endpoint: string | null };
   llmModel: string | null;
   embedModel: string | null;
-  ingestionQueueDepth: number | null;
   memoryCount: number;
   memoriesByDay: MemoryDayEntry[];
   memorySummary: MemorySummary | null;
