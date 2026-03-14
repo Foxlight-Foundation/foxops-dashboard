@@ -87,6 +87,17 @@ export interface FoxmemoryPromptsResponse {
   graphPrompt: FoxmemoryPromptConfig;
 }
 
+/** Response shape from GET/PUT/DELETE /v2/config/capture */
+export interface CaptureConfigResponse {
+  ok: boolean;
+  data: {
+    capture_message_limit: number;
+    default: number;
+    source: 'default' | 'env' | 'persisted';
+    persisted: boolean;
+  };
+}
+
 export interface FoxmemoryDiagnostics {
   graphEnabled?: boolean;
   graphLlmModel?: string | null;

@@ -579,6 +579,46 @@ app.put('/api/foxmemory/config/graph-prompt', async (req: Request<Record<string,
   }
 });
 
+// ── Capture config (message window size) ────────────────────────────────
+// Controls how many recent messages the plugin sends per capture call.
+// GET  → read current value + source
+// PUT  → set a new value (1–50, persisted across restarts)
+// DELETE → clear persisted override, revert to env var or default (10)
+
+app.get('/api/foxmemory/config/capture', async (_req: Request, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/capture`);
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.put('/api/foxmemory/config/capture', async (req: Request<Record<string, never>, unknown, { capture_message_limit: number }>, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/capture`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ capture_message_limit: req.body.capture_message_limit }),
+    });
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
+app.delete('/api/foxmemory/config/capture', async (_req: Request, res: Response) => {
+  try {
+    const upstream = await fetch(`${foxmemoryBaseUrl}/v2/config/capture`, { method: 'DELETE' });
+    const json = await upstream.json();
+    return res.status(upstream.status).json(json);
+  } catch (error: unknown) {
+    return res.status(500).json({ ok: false, error: error instanceof Error ? error.message : String(error) });
+  }
+});
+
 app.get('/api/foxmemory/graph-stats', async (_req: Request, res: Response) => {
   try {
     const upstream = await fetch(`${foxmemoryBaseUrl}/v2/graph/stats`);
