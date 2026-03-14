@@ -326,5 +326,15 @@ export interface DeleteSessionResponse {
 }
 
 
+export interface TenantMembership {
+  tenant_id: string;
+  role: 'owner' | 'admin' | 'operator' | 'viewer';
+}
+
+export interface UserRolesResponse {
+  ok: boolean;
+  data: TenantMembership[];
+}
+
 export type SectionHealth = 'ok' | 'error';
 export type HealthMap = Partial<Record<Section, SectionHealth>>;

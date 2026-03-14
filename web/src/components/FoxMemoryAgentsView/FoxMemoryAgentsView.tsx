@@ -18,6 +18,7 @@ const PromptEditor = ({
   effectivePrompt,
   source,
   onSave,
+  readOnly = false,
 }: {
   label: string;
   description: string;
@@ -25,6 +26,7 @@ const PromptEditor = ({
   effectivePrompt: string | null;
   source: string;
   onSave: (prompt: string | null) => Promise<void>;
+  readOnly?: boolean;
 }) => {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(currentPrompt ?? effectivePrompt ?? '');
@@ -76,7 +78,7 @@ const PromptEditor = ({
         />
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
           {!editing ? (
-            <Button variant="outlined" size="small" onClick={handleEdit}>Edit</Button>
+            <Button variant="outlined" size="small" onClick={handleEdit} disabled={readOnly}>Edit</Button>
           ) : (
             <>
               <Button
@@ -103,7 +105,7 @@ const PromptEditor = ({
   );
 };
 
-const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtractionPrompt, onSaveUpdatePrompt, onSaveGraphPrompt }: FoxMemoryAgentsViewProps) => (
+const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtractionPrompt, onSaveUpdatePrompt, onSaveGraphPrompt, canEdit = true }: FoxMemoryAgentsViewProps) => (
   <>
     <Grid container spacing={2} mb={2}>
       <Grid item xs={12} md={4}>
@@ -176,6 +178,7 @@ const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtract
           effectivePrompt={prompts?.extractionPrompt.effective_prompt ?? null}
           source={prompts?.extractionPrompt.source ?? '—'}
           onSave={onSaveExtractionPrompt}
+          readOnly={!canEdit}
         />
         <PromptEditor
           label="Call 2 — Update Decision"
@@ -184,6 +187,7 @@ const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtract
           effectivePrompt={prompts?.updatePrompt.effective_prompt ?? null}
           source={prompts?.updatePrompt.source ?? '—'}
           onSave={onSaveUpdatePrompt}
+          readOnly={!canEdit}
         />
         <PromptEditor
           label="Call 3 — Graph Entity Extraction"
@@ -192,6 +196,7 @@ const FoxMemoryAgentsView = ({ foxmemory, prompts, promptsLoading, onSaveExtract
           effectivePrompt={prompts?.graphPrompt.effective_prompt ?? null}
           source={prompts?.graphPrompt.source ?? '—'}
           onSave={onSaveGraphPrompt}
+          readOnly={!canEdit}
         />
       </>
     )}

@@ -1,11 +1,15 @@
 import { createApi, fetchBaseQuery } from '@reduxjs/toolkit/query/react';
-import type { SessionsResponse, FoxmemoryResponse, FoxmemoryPromptsResponse, FoxmemoryGraphStats, FoxmemoryGraphData, FoxmemoryGraphSearchResult, FoxmemoryMemorySearchResult, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse, CronJobsResponse, CronRunsResponse, FoxmemoryModelsResponse, FoxmemoryCatalogResponse, ModelRoleKey, CatalogModel } from '../types';
+import type { SessionsResponse, FoxmemoryResponse, FoxmemoryPromptsResponse, FoxmemoryGraphStats, FoxmemoryGraphData, FoxmemoryGraphSearchResult, FoxmemoryMemorySearchResult, KillArgs, KillResponse, DeleteSessionArgs, DeleteSessionResponse, CronJobsResponse, CronRunsResponse, FoxmemoryModelsResponse, FoxmemoryCatalogResponse, ModelRoleKey, CatalogModel, UserRolesResponse } from '../types';
 
 export const dashboardApi = createApi({
   reducerPath: 'dashboardApi',
   baseQuery: fetchBaseQuery({ baseUrl: '/api' }),
-  tagTypes: ['Sessions', 'Foxmemory', 'Crons', 'FoxmemoryPrompts', 'FoxmemoryGraph', 'FoxmemoryModels'],
+  tagTypes: ['Sessions', 'Foxmemory', 'Crons', 'FoxmemoryPrompts', 'FoxmemoryGraph', 'FoxmemoryModels', 'UserRoles'],
   endpoints: (builder) => ({
+    getUserRoles: builder.query<UserRolesResponse, void>({
+      query: () => '/auth/roles',
+      providesTags: ['UserRoles'],
+    }),
     getSessions: builder.query<SessionsResponse, void>({
       query: () => '/sessions',
       providesTags: ['Sessions'],
@@ -103,6 +107,7 @@ export const dashboardApi = createApi({
 });
 
 export const {
+  useGetUserRolesQuery,
   useGetSessionsQuery,
   useGetFoxmemoryOverviewQuery,
   useGetFoxmemoryPromptsQuery,

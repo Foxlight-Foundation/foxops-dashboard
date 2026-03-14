@@ -32,6 +32,15 @@ db.exec(`
     status TEXT NOT NULL,
     note TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS tenant_memberships (
+    user_id INTEGER NOT NULL,
+    tenant_id TEXT NOT NULL,
+    role TEXT NOT NULL CHECK(role IN ('owner', 'admin', 'operator', 'viewer')),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, tenant_id),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  );
 `);
 
 export interface DbUser {
@@ -109,4 +118,49 @@ export const seedAdminUser = (email: string, password: string): void => {
   if (userCount() > 0) return;
   createUser({ email, password, username: 'admin' });
   console.log(`[foxops] Admin user seeded: ${email}`);
+};
+
+// ── Tenant membership helpers ──────────────────────────────────────────────
+
+export interface TenantMembership {
+  user_id: number;
+  tenant_id: string;
+  role: 'owner' | 'admin' | 'operator' | 'viewer';
+  created_at: string;
+}
+
+const membershipStmt = {
+  byUserId: db.prepare<[number], TenantMembership>('SELECT * FROM tenant_memberships WHERE user_id = ?'),
+  byTenant: db.prepare<[string], TenantMembership & { email: string; username: string | null }>(
+    `SELECT tm.*, u.email, u.username FROM tenant_memberships tm
+     JOIN users u ON u.id = tm.user_id
+     WHERE tm.tenant_id = ?
+     ORDER BY tm.created_at`,
+  ),
+  insert: db.prepare<[number, string, string]>(
+    'INSERT INTO tenant_memberships (user_id, tenant_id, role) VALUES (?, ?, ?)',
+  ),
+  update: db.prepare<[string, number, string]>(
+    'UPDATE tenant_memberships SET role = ? WHERE user_id = ? AND tenant_id = ?',
+  ),
+  remove: db.prepare<[number, string]>(
+    'DELETE FROM tenant_memberships WHERE user_id = ? AND tenant_id = ?',
+  ),
+};
+
+export const getMembershipsByUserId = (userId: number): TenantMembership[] => membershipStmt.byUserId.all(userId);
+
+export const getMembershipsByTenant = (tenantId: string): (TenantMembership & { email: string; username: string | null })[] =>
+  membershipStmt.byTenant.all(tenantId);
+
+export const addTenantMembership = (userId: number, tenantId: string, role: string): void => {
+  membershipStmt.insert.run(userId, tenantId, role);
+};
+
+export const updateTenantMembership = (userId: number, tenantId: string, role: string): void => {
+  membershipStmt.update.run(role, userId, tenantId);
+};
+
+export const removeTenantMembership = (userId: number, tenantId: string): void => {
+  membershipStmt.remove.run(userId, tenantId);
 };
